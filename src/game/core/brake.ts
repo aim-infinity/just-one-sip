@@ -12,6 +12,8 @@ export class BrakeController {
     phase: BrakePhase = 'decel';
     private def: BrakeDef | null = null;
     private t = 0;
+    private slippery = false;
+    private skidded = false;
     factor = 1;
 
     /** Seconds left at the bottom of the brake (signals turn amber near the end). */
@@ -23,15 +25,17 @@ export class BrakeController {
         return this.hazard !== null;
     }
 
-    start(hazard: Hazard, def: BrakeDef): void {
+    start(hazard: Hazard, def: BrakeDef, slippery = false): void {
         this.hazard = hazard;
         this.def = def;
+        this.slippery = slippery;
+        this.skidded = false;
         this.phase = 'decel';
         this.t = 0;
     }
 
-    /** Advances the brake. Returns 'go' on the frame the driver pulls away. */
-    step(dt: number): 'go' | null {
+    /** Advances the brake. Returns 'go' when the driver pulls away, 'skid' mid-stop on wet roads. */
+    step(dt: number): 'go' | 'skid' | null {
         const d = this.def;
         if (!d || !this.hazard) {
             this.factor = 1;
@@ -43,6 +47,10 @@ export class BrakeController {
             const k = Math.min(1, this.t / d.decelSec);
             // brake hard first, then ease off (feels like a real stop)
             this.factor = 1 - (1 - d.slowTo) * Math.sqrt(k);
+            if (this.slippery && !this.skidded && k >= 0.45) {
+                this.skidded = true;
+                return 'skid';
+            }
             if (k >= 1) {
                 this.phase = 'hold';
                 this.t = 0;

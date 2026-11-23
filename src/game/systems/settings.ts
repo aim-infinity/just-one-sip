@@ -1,5 +1,10 @@
 /** Player preferences + personal best, persisted to localStorage (fails soft). */
+import type { DriverId } from '../config/drivers';
+import type { WeatherId } from '../config/weather';
+
 export interface Settings {
+    driver: DriverId;
+    weather: WeatherId;
     muted: boolean;
     reducedMotion: boolean;
     haptics: boolean;
@@ -37,6 +42,8 @@ const prefersReduced =
     typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export const settings: Settings = read<Settings>(SETTINGS_KEY, {
+    driver: 'careful',
+    weather: 'sunny',
     muted: false,
     reducedMotion: prefersReduced,
     haptics: true,

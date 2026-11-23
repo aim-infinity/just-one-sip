@@ -16,7 +16,8 @@ export type HazardType =
     | 'rumbleStrip'
     | 'gravel'
     | 'cow'
-    | 'signal';
+    | 'signal'
+    | 'cutIn';
 
 /** A velocity impulse applied when a wheel reaches `u` (0..1 across the hazard). */
 export interface KickPoint {
@@ -201,9 +202,26 @@ export const HAZARDS: Record<HazardType, HazardDef> = {
         // red light: gentle stop, a free sip, then the lurch when it goes green
         brake: { decelSec: 0.7, slowTo: 0, holdSec: 1.8, recoverSec: 1.0, jolt: 0.55, lurch: 0.5 },
     },
+    cutIn: {
+        type: 'cutIn',
+        widthPx: [200, 230],
+        depthPx: [0, 0],
+        impact: [1.0, 1.1],
+        minSpacingSec: 1.1,
+        difficulty: 2,
+        shape: 'flat',
+        rattlePx: 0,
+        comboable: false,
+        kicks: [],
+        // a scooter swerves in from the left — sudden hard brake
+        brake: { decelSec: 0.25, slowTo: 0.35, holdSec: 0.2, recoverSec: 0.8, jolt: 1.15, lurch: 0.4 },
+    },
 };
 
 export const HAZARD_TYPES = Object.keys(HAZARDS) as HazardType[];
+
+/** Brake-family hazards that only some drivers meet (not in the base sections). */
+export const DRIVER_ONLY: HazardType[] = ['cutIn'];
 
 /** Hazards worth lowering the bottle for (used for reactions / warnings). */
 export const isMajor = (type: HazardType) => {

@@ -1,5 +1,6 @@
 import { HAZARDS, type HazardType, type KickPoint } from '../config/hazards';
 import { ROUTE_LAYOUT, SECTIONS, sectionAt, type SectionConfig } from '../config/difficulty';
+import { DEFAULT_MODS, sectionWeights, type RideMods } from '../config/ride';
 import { progressAtFront, routePx, speedPxAt, type Tuning } from '../config/tuning';
 import { Rng } from './rng';
 
@@ -86,11 +87,11 @@ export interface RouteLayout {
     attempts: number;
 }
 
-function makeHazard(rng: Rng, type: HazardType, x: number, block: number, t: Tuning): Omit<Hazard, 'id'> {
+function makeHazard(rng: Rng, type: HazardType, x: number, block: number, t: Tuning, mul: number): Omit<Hazard, 'id'> {
     const d = HAZARDS[type];
     let width = Math.round(rng.range(d.widthPx[0], d.widthPx[1]));
     // A signal's stop line sits exactly where the front wheel will come to rest.
-    if (d.brake && d.brake.slowTo === 0) width = Math.round((frontSpeed(t, x) * d.brake.decelSec) / 2);
+    if (d.brake && d.brake.slowTo === 0) width = Math.round((frontSpeed(t, x, mul) * d.brake.decelSec) / 2);
     // depth and impact are correlated, so a deeper hole really does hit harder
     const k = rng.next();
     return {
@@ -105,17 +106,17 @@ function makeHazard(rng: Rng, type: HazardType, x: number, block: number, t: Tun
 }
 
 /** Auto speed (px/s) when its front wheel is at world x. */
-export function frontSpeed(t: Tuning, x: number): number {
-    return speedPxAt(t, progressAtFront(t, x));
+export function frontSpeed(t: Tuning, x: number, mul = 1): number {
+    return speedPxAt(t, progressAtFront(t, x)) * mul;
 }
 
 /** Seconds for the front wheel to travel from world x1 to x2 (follows the speed curve, ignores braking). */
-export function travelSec(t: Tuning, x1: number, x2: number): number {
+export function travelSec(t: Tuning, x1: number, x2: number, mul = 1): number {
     if (x2 <= x1) return 0;
     const n = Math.max(1, Math.ceil((x2 - x1) / 60));
     const dx = (x2 - x1) / n;
     let sec = 0;
-    for (let i = 0; i < n; i++) sec += dx / frontSpeed(t, x1 + (i + 0.5) * dx);
+    for (let i = 0; i < n; i++) sec += dx / frontSpeed(t, x1 + (i + 0.5) * dx, mul);
     return sec;
 }
 
@@ -124,28 +125,29 @@ export function minClearSec(t: Tuning, type: HazardType, v: number): number {
     return t.wheelbasePx / v + Math.max(t.reactionTimeSec, HAZARDS[type].minSpacingSec);
 }
 
-function layoutOnce(seed: number, t: Tuning, relax: number): Omit<RouteLayout, 'attempts' | 'drinkWindowSec'> {
+function layoutOnce(seed: number, t: Tuning, relax: number, mods: RideMods): Omit<RouteLayout, 'attempts' | 'drinkWindowSec'> {
+    const mul = mods.speedMul;
     const rng = new Rng(seed);
     const length = routePx(t);
     // Hazards are placed in world space; the front wheel starts at wheelbasePx.
     const finish = length + t.wheelbasePx;
-    const end = finish - ROUTE_LAYOUT.finishClearSec * frontSpeed(t, finish);
+    const end = finish - ROUTE_LAYOUT.finishClearSec * frontSpeed(t, finish, mul);
     const hazards: Omit<Hazard, 'id'>[] = [];
-    let x = t.wheelbasePx + ROUTE_LAYOUT.firstHazardSec * frontSpeed(t, t.wheelbasePx);
+    let x = t.wheelbasePx + ROUTE_LAYOUT.firstHazardSec * frontSpeed(t, t.wheelbasePx, mul);
     let block = 0;
 
     while (x < end) {
         const section: SectionConfig = sectionAt(progressAtFront(t, x));
-        const type = rng.weighted(section.weights);
-        const first = makeHazard(rng, type, x, block, t);
+        const type = rng.weighted(sectionWeights(section, mods));
+        const first = makeHazard(rng, type, x, block, t, mul);
         if (first.x + first.width > end) break;
         hazards.push(first);
         let last = first;
 
         if (HAZARDS[type].comboable && section.comboChance > 0 && rng.chance(section.comboChance)) {
             const comboType = rng.pick(COMBO_TYPES);
-            const cx = last.x + last.width + t.comboGapSec * frontSpeed(t, last.x);
-            const second = makeHazard(rng, comboType, cx, block, t);
+            const cx = last.x + last.width + t.comboGapSec * frontSpeed(t, last.x, mul);
+            const second = makeHazard(rng, comboType, cx, block, t, mul);
             if (second.x + second.width < end) {
                 hazards.push(second);
                 last = second;
@@ -153,7 +155,7 @@ function layoutOnce(seed: number, t: Tuning, relax: number): Omit<RouteLayout, '
         }
 
         block++;
-        const v = frontSpeed(t, last.x + last.width);
+        const v = frontSpeed(t, last.x + last.width, mul);
         const wantSafe = section.safeEvery > 0 && block % section.safeEvery === 0;
         let gap = wantSafe ? section.safeGapSec : rng.range(section.gapSec[0], section.gapSec[1]);
         gap = Math.max(gap * t.obstacleSpacingScale * relax, minClearSec(t, last.type, v));
@@ -169,24 +171,24 @@ const COMBO_TYPES = (Object.keys(HAZARDS) as HazardType[]).filter((k) => HAZARDS
  * time between blocks, minus wheelbase traversal, settling and arm raise.
  * Conservative: ignores the extra (sippable) time spent stopped at signals.
  */
-export function drinkWindowSec(hazards: Omit<Hazard, 'id'>[], t: Tuning, lengthPx = routePx(t)): number {
+export function drinkWindowSec(hazards: Omit<Hazard, 'id'>[], t: Tuning, lengthPx = routePx(t), mul = 1): number {
     const raise = t.raiseMs / 1000;
     const margin = 0.1;
     const blocks: { start: number; end: number }[] = [];
     for (const h of hazards) {
         const b = blocks[blocks.length - 1];
-        if (b && h.x - b.end < t.comboGapSec * frontSpeed(t, h.x) * 1.5) b.end = Math.max(b.end, h.x + h.width);
+        if (b && h.x - b.end < t.comboGapSec * frontSpeed(t, h.x, mul) * 1.5) b.end = Math.max(b.end, h.x + h.width);
         else blocks.push({ start: h.x, end: h.x + h.width });
     }
     let total = 0;
     let freeFrom = t.wheelbasePx; // front wheel world x from which the road is clear
     for (const b of blocks) {
-        total += Math.max(0, travelSec(t, freeFrom, b.start) - raise - margin);
+        total += Math.max(0, travelSec(t, freeFrom, b.start, mul) - raise - margin);
         // rear wheel must clear the block, then settle
-        freeFrom = b.end + t.wheelbasePx + t.settleSec * frontSpeed(t, b.end);
+        freeFrom = b.end + t.wheelbasePx + t.settleSec * frontSpeed(t, b.end, mul);
     }
     const finish = lengthPx + t.wheelbasePx;
-    total += Math.max(0, travelSec(t, freeFrom, finish) - raise);
+    total += Math.max(0, travelSec(t, freeFrom, finish, mul) - raise);
     return total;
 }
 
@@ -198,14 +200,14 @@ export function requiredDrinkSec(t: Tuning): number {
  * Seeded, constrained generator. Retries with derived seeds until the layout
  * guarantees enough safe drinking time; relaxes spacing as a last resort.
  */
-export function generateRoute(seed: number, t: Tuning): RouteLayout {
+export function generateRoute(seed: number, t: Tuning, mods: RideMods = DEFAULT_MODS): RouteLayout {
     const need = requiredDrinkSec(t) * ROUTE_LAYOUT.minDrinkWindowRatio;
     let best: RouteLayout | undefined;
     for (let attempt = 0; attempt < ROUTE_LAYOUT.maxAttempts; attempt++) {
         const relax = attempt < ROUTE_LAYOUT.maxAttempts / 2 ? 1 : 1 + (attempt - ROUTE_LAYOUT.maxAttempts / 2) * 0.08;
         const s = (seed + attempt * 7919) >>> 0;
-        const layout = layoutOnce(s, t, relax);
-        const window = drinkWindowSec(layout.hazards, t, layout.lengthPx);
+        const layout = layoutOnce(s, t, relax, mods);
+        const window = drinkWindowSec(layout.hazards, t, layout.lengthPx, mods.speedMul);
         const candidate: RouteLayout = { ...layout, seed, drinkWindowSec: window, attempts: attempt + 1 };
         if (window >= need) return candidate;
         if (!best || window > best.drinkWindowSec) best = candidate;

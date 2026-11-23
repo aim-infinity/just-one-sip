@@ -4,6 +4,8 @@ import { cloneTuning, type Tuning } from '../src/game/config/tuning';
 import { HAZARDS } from '../src/game/config/hazards';
 import { Road, generateRoute } from '../src/game/core/road';
 import { RideSimulation } from '../src/game/core/simulation';
+import { DEFAULT_MODS, rideMods, type RideMods } from '../src/game/config/ride';
+import { DRIVER_IDS } from '../src/game/config/drivers';
 
 type Bot = (s: RideSimulation) => boolean;
 const big = (h: { type: keyof typeof HAZARDS }) => HAZARDS[h.type].impact[1] >= 0.75 || !!HAZARDS[h.type].brake;
@@ -22,15 +24,15 @@ export const BOTS: [string, Bot][] = [
   ['always', () => true],
 ];
 
-export function run(t: Tuning, N = 150, label = '') {
+export function run(t: Tuning, N = 150, label = '', mods: RideMods = DEFAULT_MODS) {
   const res: string[] = [];
   let hz = 0, att = 0;
   for (const [name, bot] of BOTS) {
     let wins = 0, time = 0, spill = 0;
     for (let s = 1; s <= N; s++) {
-      const r = generateRoute(s * 31, t);
+      const r = generateRoute(s * 31, t, mods);
       if (name === 'timely') { hz += r.hazards.length; att += r.attempts; }
-      const sim = new RideSimulation(t, new Road(r.hazards, r.lengthPx), { seed: s });
+      const sim = new RideSimulation(t, new Road(r.hazards, r.lengthPx), { seed: s, mods });
       while (sim.state === 'playing') sim.step(t.fixedStep, bot(sim));
       if (sim.outcome === 'won') { wins++; time += sim.time; }
       spill += sim.bottle.spilledMl;
@@ -40,4 +42,7 @@ export function run(t: Tuning, N = 150, label = '') {
   console.log(label, `hz ${(hz / N).toFixed(1)} att ${(att / N).toFixed(1)} |`, res.join('  '));
 }
 
-if (!process.env.NO_MAIN) run(cloneTuning());
+if (!process.env.NO_MAIN) {
+  run(cloneTuning(), 100, 'neutral        ');
+  for (const d of DRIVER_IDS) for (const w of ['sunny', 'rainy'] as const) run(cloneTuning(), 100, `${d.padEnd(13)} ${w.padEnd(6)}`, rideMods(d, w));
+}

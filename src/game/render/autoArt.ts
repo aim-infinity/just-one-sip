@@ -582,3 +582,78 @@ export function drawZebu(c: Ctx): void {
     c.ellipse(52, 60, 14, 9, 0.3, 0, Math.PI * 2);
     c.fill();
 }
+
+// ─── Scooter that cuts in (impatient driver's nemesis) ─────────────────────
+
+export const SCOOTER_TEX = { w: 120, h: 110 };
+
+export function drawScooter(c: Ctx): void {
+    const base = 104;
+    // wheels
+    for (const x of [24, 92]) {
+        c.fillStyle = '#1b1b1b';
+        c.beginPath();
+        c.arc(x, base - 12, 12, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#b8bec4';
+        c.beginPath();
+        c.arc(x, base - 12, 5, 0, Math.PI * 2);
+        c.fill();
+    }
+    // body
+    c.beginPath();
+    c.moveTo(10, base - 22);
+    c.quadraticCurveTo(14, base - 44, 40, base - 44);
+    c.lineTo(66, base - 44);
+    c.lineTo(84, base - 30);
+    c.lineTo(92, base - 58);
+    c.lineTo(100, base - 58);
+    c.lineTo(104, base - 24);
+    c.quadraticCurveTo(60, base - 14, 10, base - 22);
+    c.closePath();
+    c.fillStyle = '#e8574a';
+    c.fill();
+    ink(c, 3);
+    // seat + handle
+    c.fillStyle = '#2b2b2b';
+    rr(c, 30, base - 52, 34, 9, 4);
+    c.fill();
+    c.strokeStyle = INK;
+    c.lineWidth = 4;
+    c.beginPath();
+    c.moveTo(96, base - 58);
+    c.lineTo(90, base - 74);
+    c.lineTo(80, base - 74);
+    c.stroke();
+    c.fillStyle = '#fff3a8';
+    c.beginPath();
+    c.arc(103, base - 50, 4, 0, Math.PI * 2);
+    c.fill();
+    // rider
+    c.fillStyle = '#3d4450';
+    rr(c, 40, base - 72, 22, 26, 8);
+    c.fill();
+    ink(c, 2.5);
+    c.strokeStyle = '#3d4450';
+    c.lineWidth = 7;
+    c.beginPath();
+    c.moveTo(58, base - 66);
+    c.lineTo(80, base - 72);
+    c.stroke();
+    c.strokeStyle = '#2e3a59';
+    c.lineWidth = 8;
+    c.beginPath();
+    c.moveTo(50, base - 48);
+    c.lineTo(70, base - 46);
+    c.lineTo(74, base - 30);
+    c.stroke();
+    // helmet with visor
+    c.fillStyle = '#ffc928';
+    c.beginPath();
+    c.arc(52, base - 84, 12, 0, Math.PI * 2);
+    c.fill();
+    ink(c, 2.5);
+    c.fillStyle = '#2b2b2b';
+    rr(c, 54, base - 88, 10, 7, 3);
+    c.fill();
+}

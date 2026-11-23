@@ -6,9 +6,8 @@ import { RideSimulation } from '../src/game/core/simulation';
 import { computeScore } from '../src/game/core/scoring';
 
 /**
- * Balance regression tests using scripted "players". Spills never block a
- * win, so the guard is: good timing finishes cleanly (stars, score), holding
- * through every bump makes a mess, and never drinking always loses.
+ * Balance regression tests using scripted "players": good timing wins,
+ * holding the bottle up through every bump fills the 50 ml mess meter.
  */
 const t = cloneTuning();
 type Bot = (s: RideSimulation) => boolean;
@@ -46,11 +45,12 @@ describe('Balance', () => {
         expect(winRate(timely)).toBeGreaterThanOrEqual(0.9);
     });
 
-    it('holding through every bump makes a mess and scores far lower', () => {
-        const good = play(timely);
-        const mash = play(alwaysHold);
-        expect(mash.avgSpilled).toBeGreaterThan(good.avgSpilled * 1.8);
-        expect(mash.avgScore).toBeLessThan(good.avgScore * 0.8);
+    it('holding the bottle up the whole ride usually loses', () => {
+        expect(winRate(alwaysHold)).toBeLessThanOrEqual(0.25);
+    });
+
+    it('good timing scores far higher than mashing', () => {
+        expect(play(alwaysHold).avgScore).toBeLessThan(play(timely).avgScore * 0.6);
     });
 
     it('never drinking always loses', () => {

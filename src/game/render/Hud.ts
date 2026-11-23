@@ -65,7 +65,22 @@ export class Hud {
         route.lineStyle(2, P.ink, 1);
         route.strokeRect(this.routeX1 + 5, 12, 24, 18);
         this.routeAuto = s.add.image(this.routeX0, 30, 'autoIcon').setScale(0.13 * TEX_SCALE).setOrigin(0.5, 0.85);
-        if (showRoute) this.root.add([route, this.distText, this.routeAuto]);
+        if (showRoute) {
+            this.root.add([route, this.distText, this.routeAuto]);
+            const d = sim.mods.driver;
+            const wx = sim.mods.weather;
+            const badge = s.add
+                .text(width / 2, 100, `${d.emoji} ${d.name} (${d.trait}) · ${wx.emoji} ${wx.label}`, {
+                    fontFamily: FONT,
+                    fontSize: '18px',
+                    color: '#ffffff',
+                    fontStyle: '800',
+                    stroke: P.inkCss,
+                    strokeThickness: 4,
+                })
+                .setOrigin(0.5, 0);
+            this.root.add(badge);
+        }
         else {
             route.destroy();
             this.distText.destroy();
@@ -108,9 +123,13 @@ export class Hud {
 
         if (drunk !== this.last.drunk || spill !== this.last.spill) {
             this.drunkText.setText(`${drunk} / ${t.capacityMl} ml`);
-            this.spillText.setText(spill > 0 ? `💦 ${spill} ml spilled · keep sipping!` : 'Nothing spilled yet');
+            const lim = Math.round(t.spillLimitMl);
+            this.spillText.setText(spill > 0 ? `💦 ${spill} / ${lim} ml spilled` : `Spill limit ${lim} ml`);
             this.spillText.setColor(spill > 0 ? '#c0392b' : '#3f8f5a');
         }
+        // the mess meter pulses when you're close to the limit
+        const danger = b.spilledMl / Math.max(1, t.spillLimitMl);
+        this.spillText.setAlpha(danger > 0.7 ? 0.5 + 0.5 * Math.abs(Math.sin(sim.time * 8)) : 1);
         if (dist !== this.last.dist && this.distText.active) this.distText.setText(`${dist} m to go`);
         this.last = { drunk, spill, dist };
 
@@ -141,11 +160,7 @@ export class Hud {
             g.fillStyle(P.water, 1);
             g.fillRoundedRect(x0, y, Math.max(12, w * frac), 12, 6);
         }
-        const sfrac = Math.min(1 - frac, b.spilledMl / t.capacityMl);
-        if (sfrac > 0.005) {
-            g.fillStyle(P.red, 0.8);
-            g.fillRect(x0 + w - w * sfrac, y, w * sfrac, 12);
-        }
+
 
         if (this.routeAuto.active) {
             this.routeAuto.x = this.routeX0 + (this.routeX1 - this.routeX0) * sim.progress;

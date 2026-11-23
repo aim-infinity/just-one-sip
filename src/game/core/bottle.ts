@@ -1,6 +1,9 @@
 /**
- * Water bookkeeping. Water only ever *moves* from `remainingMl` into
- * `consumedMl` or `spilledMl`, so remaining + consumed + spilled === capacity.
+ * Water bookkeeping.
+ *  - The bottle only empties by *drinking*: remaining + consumed === capacity.
+ *  - Spills are tracked separately on a "mess meter" (`spilledMl`). They never
+ *    take water away from you; spill too much (TUNING.spillLimitMl) and the
+ *    ride ends instead.
  */
 export class Bottle {
     remainingMl: number;
@@ -20,12 +23,11 @@ export class Bottle {
         return amt;
     }
 
-    /** Move up to `ml` onto the floor/shirt. Returns the amount actually spilled. */
+    /** Record `ml` splashed onto the floor/shirt (mess meter only). Returns the amount added. */
     spill(ml: number): number {
-        const amt = Math.max(0, Math.min(ml, this.remainingMl));
-        this.remainingMl -= amt;
+        if (this.isEmpty) return 0;
+        const amt = Math.max(0, ml);
         this.spilledMl += amt;
-        this.snap();
         return amt;
     }
 

@@ -7,25 +7,33 @@ import { RideSimulation } from '../src/game/core/simulation';
 import { sloshAmount } from '../src/game/core/drinking';
 
 const EPS = 1e-6;
-const total = (b: Bottle) => b.remainingMl + b.consumedMl + b.spilledMl;
+/** Spills live on a separate mess meter, so the bottle itself is always remaining + drunk. */
+const total = (b: Bottle) => b.remainingMl + b.consumedMl;
 
 describe('Bottle conservation', () => {
-    it('drink and spill never create or destroy water', () => {
+    it('drinking never creates or destroys water, and spills never take any away', () => {
         const b = new Bottle(250);
         const rng = new Rng(42);
         for (let i = 0; i < 5000; i++) {
+            const before = b.remainingMl;
             if (rng.chance(0.5)) b.drink(rng.range(-2, 12));
-            else b.spill(rng.range(-2, 12));
+            else {
+                b.spill(rng.range(-2, 12));
+                expect(b.remainingMl).toBe(before);
+            }
             expect(Math.abs(total(b) - 250)).toBeLessThan(EPS);
             expect(b.remainingMl).toBeGreaterThanOrEqual(0);
         }
         expect(b.isEmpty).toBe(true);
     });
 
-    it('cannot drink or spill more than remains', () => {
+    it('cannot drink more than remains; spills only fill the mess meter', () => {
         const b = new Bottle(10);
+        b.spill(4);
+        expect(b.remainingMl).toBe(10);
+        expect(b.spilledMl).toBe(4);
         expect(b.drink(25)).toBe(10);
-        expect(b.spill(5)).toBe(0);
+        expect(b.spill(5)).toBe(0); // nothing left to spill
         expect(b.remainingMl).toBe(0);
     });
 });

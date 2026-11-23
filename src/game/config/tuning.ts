@@ -36,8 +36,9 @@ export const TUNING = {
 
     // ── Bottle & drinking ───────────────────────────────────────────────
     capacityMl: 250,
-    /** Finish the bottle before your stop to win — spills never block a win.
-     *  You only lose by arriving with water left, or by spilling every last drop. */
+    /** Spill this much (the mess meter) and the ride ends. Spills never reduce
+     *  the water you can drink — drink all of it before your stop to win. */
+    spillLimitMl: 50,
     /** Flow rate into the mouth while the bottle is correctly at the lips. */
     drinkRateMlPerSec: 11,
 

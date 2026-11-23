@@ -3,15 +3,24 @@ import type { RideSimulation } from '../core/simulation';
 import { hazardProfile, type Hazard } from '../core/road';
 import { FONT, GROUND_Y, PALETTE as P } from './palette';
 import { TEX_SCALE } from './textures';
+import type { WeatherProfile } from '../config/weather';
 
 /**
  * Visuals for every hazard type, in a clear side-view "cross-section" style:
  * you can read the shape of the danger (bowl, hump, patch, water) at a glance.
  * Each view is a container positioned at the hazard's leading edge (local x = 0).
  */
+export interface Light {
+    x: number;
+    y: number;
+    r: number;
+}
+
 export interface HazardView {
     root: Phaser.GameObjects.Container;
     update?: (sim: RideSimulation, time: number) => void;
+    /** Light sources (hazard-local) that punch through the night darkness. */
+    lights?: () => Light[];
 }
 
 const FAR = 530;
@@ -303,6 +312,43 @@ function drawSignal(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, h: Haza
     };
 }
 
+function drawCutIn(scene: Phaser.Scene, h: Hazard, root: Phaser.GameObjects.Container): HazardView['update'] {
+    // A scooter waits in the next lane, then swerves in front of the auto and zooms off.
+    const sc = scene.add.image(h.width - 40, NEAR + 18, 'scooter').setOrigin(0.5, 1).setScale(TEX_SCALE);
+    const lines = scene.add.graphics();
+    root.add([lines, sc]);
+    return (sim: RideSimulation, time: number) => {
+        const d = h.x + h.width - sim.frontX;
+        const k = Math.min(1, Math.max(0, (h.width + 60 - d) / (h.width * 0.9)));
+        const e = k * k * (3 - 2 * k);
+        sc.x = h.width - 40 + e * 260;
+        sc.y = NEAR + 18 - e * (NEAR - G + 14) + Math.sin(time * 30) * (k > 0 && k < 1 ? 1 : 0);
+        sc.setRotation(k > 0 && k < 0.7 ? -0.12 : 0);
+        lines.clear();
+        if (k > 0.05 && k < 1) {
+            lines.lineStyle(3, 0xffffff, 0.7);
+            for (let i = 0; i < 3; i++) lines.lineBetween(sc.x - 70 - i * 14, sc.y - 20 - i * 14, sc.x - 110 - i * 14, sc.y - 20 - i * 14);
+        }
+    };
+}
+
+/** Rain: a muddy puddle sheen sits over potholes, so you see *something* but not its shape. */
+function drawPuddleCover(scene: Phaser.Scene, h: Hazard, root: Phaser.GameObjects.Container): (t: number) => void {
+    const w = h.width;
+    const g = scene.add.graphics();
+    root.add(g);
+    return (t: number) => {
+        g.clear();
+        g.fillStyle(0x7c8a99, 0.62);
+        g.fillEllipse(w / 2, G + 4, w + 34, 30);
+        g.lineStyle(2, 0xdbe9f5, 0.8);
+        const r = (t * 1.2) % 1;
+        g.strokeEllipse(w / 2 + Math.sin(t) * 6, G + 4, 20 + r * (w * 0.6), 6 + r * 12);
+        g.lineStyle(2, 0xffffff, 0.5);
+        g.lineBetween(w * 0.2, G - 2, w * 0.45, G - 2);
+    };
+}
+
 function drawCow(scene: Phaser.Scene, h: Hazard, root: Phaser.GameObjects.Container): HazardView['update'] {
     // The cow stands in the lane, then ambles to the far side as the auto crawls up.
     const cow = scene.add.image(h.width, NEAR - 8, 'zebu').setOrigin(0.5, 1).setScale(TEX_SCALE * 0.95);
@@ -317,10 +363,11 @@ function drawCow(scene: Phaser.Scene, h: Hazard, root: Phaser.GameObjects.Contai
     };
 }
 
-export function createHazardView(scene: Phaser.Scene, h: Hazard): HazardView {
+export function createHazardView(scene: Phaser.Scene, h: Hazard, weather?: WeatherProfile): HazardView {
     const g = scene.add.graphics();
     const root = scene.add.container(0, 0, [g]);
     let update: HazardView['update'];
+    let lights: HazardView['lights'];
     switch (h.type) {
         case 'pothole':
             drawPothole(g, h);
@@ -347,6 +394,10 @@ export function createHazardView(scene: Phaser.Scene, h: Hazard): HazardView {
             break;
         case 'signal':
             update = drawSignal(scene, g, h, root);
+            lights = () => [{ x: h.width + 34 + 160 + 45, y: FAR - 176, r: 70 }];
+            break;
+        case 'cutIn':
+            update = drawCutIn(scene, h, root);
             break;
         case 'cow':
             update = drawCow(scene, h, root);
@@ -356,5 +407,16 @@ export function createHazardView(scene: Phaser.Scene, h: Hazard): HazardView {
             void never;
         }
     }
-    return { root, update };
+    // rain hides pothole shapes under puddles
+    if (weather?.puddles && (h.type === 'pothole' || h.type === 'manhole')) {
+        const cover = drawPuddleCover(scene, h, root);
+        const prev = update;
+        update = (sim, t) => {
+            prev?.(sim, t);
+            cover(t);
+        };
+    }
+    // reflective paint catches the headlight at night
+    if (h.type === 'speedBreaker' || h.type === 'rumbleStrip') lights = () => [{ x: h.width / 2, y: G + 10, r: 46 }];
+    return { root, update, lights };
 }

@@ -6,10 +6,24 @@ Finish it before your stop. The potholes have other plans.
 **One control:** press and hold anywhere to raise the bottle and drink. Let go to lower it.
 Sip on smooth road, lower before bumps.
 
-- **Win:** finish the bottle before your stop. Spills never stop you winning.
-- **Spills still count:** they're tracked, cost score, and decide your stars
-  (3 stars under 10 ml spilled, 2 under 35 ml).
-- **Lose:** reach your stop with water left (or spill every last drop).
+- **Win:** drink all 250 ml before your stop.
+- **Spills never take water away from you.** They fill a separate mess meter; at
+  **50 ml spilled** the ride ends.
+- **Lose:** mess meter full, or reaching your stop with water left.
+
+Before each ride, pick a **driver** and the **weather** (*Choose your ride* screen):
+
+| Driver | Behaviour |
+| --- | --- |
+| 🧘 Shankar (Careful) | Slows down before bumps, so hits are softer. Gentle brakes |
+| 😤 Raju (Impatient) | Faster; scooters cut in and he slams the brakes |
+| 😎 Manju (Overconfident) | Fastest, never slows, says *"Road super saar!"* right before potholes |
+
+| Weather | Effect |
+| --- | --- |
+| ☀️ Sunny | Clear road |
+| 🌧️ Rainy | Puddles partly hide potholes, more waterlogged roads, slippery braking (longer stop + skid), rain and spray |
+| 🌙 Night | Darkness; the headlight, street lamps, cabin light and reflective paint light the way |
 
 The auto speeds up from 6 to a capped 9 m/s over the ~40 s ride. Road blockers:
 
@@ -23,6 +37,7 @@ The auto speeds up from 6 to a capped 9 m/s over the ~40 s ride. Road blockers:
 | Rumble strip | Fast rattle: sippable at a small cost |
 | Metro-work gravel | Long, loose and rattly |
 | Cow crossing | Sudden brake: the passenger is thrown forward |
+| Scooter cut-in | Impatient driver only: a hard sudden brake |
 | Traffic signal | Full stop (free sip!), amber warning, then a lurch on green |
 
 Built with Phaser 3, TypeScript and Vite. No backend, no accounts, no network calls
@@ -175,6 +190,9 @@ the whole way usually loses.
 | -------------------------------------- | -------------------------------------------------- |
 | Speed curve, route length (≈40 s ride)  | `tuning.ts` → `SPEED_PROFILE`, `speedScale`, `routeMeters` |
 | Braking jolts (cows, signals)           | `tuning.ts` → `brake*`, `hazards.ts` → `brake`     |
+| Spill limit                             | `tuning.ts` → `spillLimitMl`                       |
+| Driver personalities                    | `config/drivers.ts`                                |
+| Weather                                 | `config/weather.ts`, visuals in `render/WeatherView.ts` |
 | Drink rate, capacity                    | `tuning.ts` → `drinkRateMlPerSec`, `capacityMl`    |
 | Arm timings                             | `tuning.ts` → `raiseMs`, `lowerMs`                 |
 | Bounce / pitch                          | `tuning.ts` → `suspension*`, `kickBasePxPerSec`    |

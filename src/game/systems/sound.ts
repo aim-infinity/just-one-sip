@@ -10,6 +10,7 @@ class SoundEngine {
     private master: GainNode | null = null;
     private noise: AudioBuffer | null = null;
     private engine: { stop: () => void; setLoad: (v: number) => void } | null = null;
+    private rainNode: { stop: () => void } | null = null;
 
     get ready(): boolean {
         return !!this.ctx && this.ctx.state === 'running';
@@ -201,6 +202,39 @@ class SoundEngine {
     clank(): void {
         this.osc('triangle', 920, 860, 0.12, 0.18);
         this.osc('square', 1380, 1300, 0.08, 0.06, 0.01);
+    }
+
+    /** Soft hiss of rain on the canopy. */
+    startRain(): void {
+        const c = this.ctx;
+        if (!c || !this.master || !this.noise || this.rainNode) return;
+        const src = c.createBufferSource();
+        src.buffer = this.noise;
+        src.loop = true;
+        const hp = c.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 1800;
+        const g = c.createGain();
+        g.gain.value = 0.0001;
+        g.gain.setTargetAtTime(0.09, c.currentTime, 0.5);
+        src.connect(hp).connect(g).connect(this.master);
+        src.start();
+        this.rainNode = {
+            stop: () => {
+                g.gain.setTargetAtTime(0.0001, c.currentTime, 0.2);
+                src.stop(c.currentTime + 0.8);
+            },
+        };
+    }
+
+    stopRain(): void {
+        this.rainNode?.stop();
+        this.rainNode = null;
+    }
+
+    thunder(): void {
+        this.noiseBurst(120, 0.7, 1.4, 0.45, 'lowpass', 0.15);
+        this.osc('sine', 60, 35, 1.2, 0.25, 0.2);
     }
 
     moo(): void {

@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import type { Road } from '../core/road';
 import type { RideSimulation } from '../core/simulation';
-import { createHazardView, type HazardView } from './hazardArt';
+import { createHazardView, type HazardView, type Light } from './hazardArt';
+import type { WeatherProfile } from '../config/weather';
 import { FONT, PALETTE as P } from './palette';
 import { RS } from './resolution';
 import { TEX_SCALE } from './textures';
@@ -17,8 +18,13 @@ export class RoadView {
         private scene: Phaser.Scene,
         private road: Road,
         private width: number,
+        private weather?: WeatherProfile,
     ) {
         this.surface = scene.add.tileSprite(0, 500, width, 220, 'road').setOrigin(0).setDepth(5).setTileScale(TEX_SCALE);
+    }
+
+    tint(color: number): void {
+        this.surface.setTint(color);
     }
 
     setFinish(worldX: number): void {
@@ -48,7 +54,7 @@ export class RoadView {
             const visible = h.x + h.width > left && h.x < right;
             let v = this.views.get(h.id);
             if (visible && !v) {
-                v = createHazardView(this.scene, h);
+                v = createHazardView(this.scene, h, this.weather);
                 v.root.setDepth(6);
                 this.views.set(h.id, v);
             } else if (!visible && v) {
@@ -63,5 +69,12 @@ export class RoadView {
             if (h.x > right) break;
         }
         if (this.finish) this.finish.x = this.finishX - camX;
+    }
+
+    /** Screen-space light sources from visible hazards (for night). */
+    lights(): Light[] {
+        const out: Light[] = [];
+        for (const v of this.views.values()) for (const l of v.lights?.() ?? []) out.push({ x: l.x + v.root.x, y: l.y, r: l.r });
+        return out;
     }
 }

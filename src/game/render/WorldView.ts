@@ -5,6 +5,8 @@ import { AutoView, type Mood } from './AutoView';
 import { ParallaxView } from './ParallaxView';
 import { RoadView } from './RoadView';
 import { SplashFx } from './SplashFx';
+import { WeatherView } from './WeatherView';
+import { FONT } from './palette';
 import { GROUND_Y, PALETTE as P } from './palette';
 
 /**
@@ -53,6 +55,10 @@ export class WorldView {
     readonly auto: AutoView;
     readonly fx: SplashFx;
     readonly mood = new MoodTracker();
+    readonly weather: WeatherView;
+    private bubble?: Phaser.GameObjects.Container;
+    private bubbleT = 0;
+    private sprayT = 0;
     readonly autoX: number;
     private lastCamX = 0;
 
@@ -62,13 +68,39 @@ export class WorldView {
         readonly width: number,
     ) {
         this.autoX = Math.round(width * sim.t.autoAnchorFraction);
-        this.parallax = new ParallaxView(scene, width);
-        this.road = new RoadView(scene, sim.road, width);
+        const wx = sim.mods.weather;
+        this.parallax = new ParallaxView(scene, width, wx);
+        this.road = new RoadView(scene, sim.road, width, wx);
+        if (wx.id === 'rainy') this.road.tint(0xb8c2cc);
         this.auto = new AutoView(scene);
         this.fx = new SplashFx(scene, settings.reducedMotion);
         this.fx.floorY = GROUND_Y + 20;
+        this.weather = new WeatherView(scene, width, wx, settings.reducedMotion);
+        this.scene = scene;
         if (Number.isFinite(sim.lengthPx)) this.road.setFinish(sim.lengthPx + sim.t.wheelbasePx + 30);
         this.lastCamX = this.camX;
+    }
+
+    private scene: Phaser.Scene;
+
+    /** Driver speech bubble above the auto. */
+    say(text: string, ms = 1900): void {
+        this.bubble?.destroy();
+        const s = this.scene;
+        const t = s.add.text(0, 0, text, { fontFamily: FONT, fontSize: '22px', color: '#2b1d14', fontStyle: '800', align: 'center', wordWrap: { width: 260 } }).setOrigin(0.5);
+        const w = t.width + 28;
+        const h = t.height + 16;
+        const g = s.add.graphics();
+        g.fillStyle(0x2b1d14, 0.25);
+        g.fillRoundedRect(-w / 2 + 2, -h / 2 + 4, w, h, 14);
+        g.fillStyle(0xffffff, 1);
+        g.fillRoundedRect(-w / 2, -h / 2, w, h, 14);
+        g.fillTriangle(-14, h / 2 - 1, 2, h / 2 - 1, -18, h / 2 + 14);
+        g.lineStyle(3, 0x2b1d14, 1);
+        g.strokeRoundedRect(-w / 2, -h / 2, w, h, 14);
+        this.bubble = s.add.container(0, 0, [g, t]).setDepth(46).setScale(0.6);
+        s.tweens.add({ targets: this.bubble, scale: 1, duration: 200, ease: 'Back.out' });
+        this.bubbleT = ms / 1000;
     }
 
     get camX(): number {
@@ -108,5 +140,29 @@ export class WorldView {
             motionScale: settings.reducedMotion ? 0.45 : 1,
         }, dt);
         this.fx.update(dt, Math.min(scroll, this.sim.cruiseSpeed * 0.05));
+
+        // weather: spray off the rear wheel in the rain, lights at night
+        const a = this.auto;
+        if (this.sim.mods.weather.id === 'rainy' && this.sim.speed > 50) {
+            this.sprayT -= dt;
+            if (this.sprayT <= 0) {
+                this.sprayT = 0.05;
+                this.fx.burst(this.sim.rearX - camX - 20, GROUND_Y - 2, 2, { up: 140, spread: 60, dir: -1.2, color: 0xcfe0ee });
+            }
+        }
+        const lamp = a.toScreen({ x: 142, y: -36 });
+        this.weather.update(dt, camX, { x: lamp.x, y: lamp.y, rot: a.container.rotation }, a.toScreen({ x: -40, y: -120 }), this.road.lights());
+
+        // speech bubble follows the driver's head
+        if (this.bubble) {
+            const p = a.toScreen({ x: 96, y: -200 });
+            this.bubble.setPosition(p.x + 40, p.y - 30);
+            this.bubbleT -= dt;
+            if (this.bubbleT < 0.25) this.bubble.setAlpha(Math.max(0, this.bubbleT / 0.25));
+            if (this.bubbleT <= 0) {
+                this.bubble.destroy();
+                this.bubble = undefined;
+            }
+        }
     }
 }

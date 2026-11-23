@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Rng } from '../core/rng';
 import { PALETTE as P } from './palette';
-import { AUTO_TEX, COW_TEX, drawAutoBack, drawAutoFront, drawDriverHead, drawWheel, drawZebu } from './autoArt';
+import { AUTO_TEX, COW_TEX, SCOOTER_TEX, drawAutoBack, drawAutoFront, drawDriverHead, drawScooter, drawWheel, drawZebu } from './autoArt';
 import { RS } from './resolution';
 
 /**
@@ -413,6 +413,36 @@ export function makeTextures(scene: Phaser.Scene): void {
     canvasTex(scene, 'autoFront', AUTO_TEX.w, AUTO_TEX.h, drawAutoFront);
     canvasTex(scene, 'zebu', COW_TEX.w, COW_TEX.h, drawZebu);
     canvasTex(scene, 'driverHead', 44, 44, drawDriverHead);
+    canvasTex(scene, 'scooter', SCOOTER_TEX.w, SCOOTER_TEX.h, drawScooter);
+    // soft light brushes for night (erased out of the darkness layer)
+    canvasTex(scene, 'glow', 256, 256, (c) => {
+        const g = c.createRadialGradient(128, 128, 0, 128, 128, 128);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(0.45, 'rgba(255,255,255,0.75)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = g;
+        c.fillRect(0, 0, 256, 256);
+    });
+    canvasTex(scene, 'beam', 720, 300, (c) => {
+        // headlight cone with soft edges: stacked wedges, widest = faintest
+        const g = c.createLinearGradient(0, 0, 720, 0);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(0.55, 'rgba(255,255,255,0.85)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = g;
+        for (let i = 0; i < 6; i++) {
+            const spread = 150 - i * 22;
+            c.globalAlpha = 0.28;
+            c.beginPath();
+            c.moveTo(0, 144);
+            c.lineTo(720, 150 - spread);
+            c.lineTo(720, 150 + spread);
+            c.lineTo(0, 156);
+            c.closePath();
+            c.fill();
+        }
+        c.globalAlpha = 1;
+    });
     // composite auto for the HUD / share card (no characters)
     canvasTex(scene, 'autoIcon', AUTO_TEX.w, AUTO_TEX.h + 10, (c) => {
         const src = (k: string) => scene.textures.get(k).getSourceImage() as HTMLCanvasElement;

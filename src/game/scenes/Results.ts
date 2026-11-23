@@ -4,10 +4,14 @@ import { DESIGN_HEIGHT } from '../render/palette';
 import { headline, verdict, stars, type RideResult } from '../core/scoring';
 import { FONT, PALETTE as P } from '../render/palette';
 import { label, makeButton, panel, title } from '../render/ui';
+import { DRIVERS, type DriverId } from '../config/drivers';
+import { WEATHER, type WeatherId } from '../config/weather';
 import type { Best } from '../systems/settings';
 import { shareResult } from '../systems/share';
 
 export interface ResultsData {
+    driver?: DriverId;
+    weather?: WeatherId;
     result: RideResult;
     score: number;
     best: Best;
@@ -46,6 +50,12 @@ export class Results extends Phaser.Scene {
         starText.setOrigin(0.5);
         root.add(starText);
 
+        if (data.driver && data.weather) {
+            const d = DRIVERS[data.driver];
+            const w = WEATHER[data.weather];
+            starText.x = cx - 170;
+            root.add(label(this, cx + 110, 160, `${d.emoji} ${d.name} · ${w.emoji} ${w.label}`, 22, '#6b5b4b'));
+        }
         root.add(label(this, cx, 210, `“${verdict(r)}”`, 30, P.inkCss, 'italic 800').setWordWrapWidth(780));
 
         // stat cards

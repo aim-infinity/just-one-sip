@@ -3,6 +3,7 @@ import { Boot } from './scenes/Boot';
 import { Home } from './scenes/Home';
 import { Play } from './scenes/Play';
 import { Results } from './scenes/Results';
+import { Setup } from './scenes/Setup';
 import { DESIGN_HEIGHT } from './render/palette';
 import { RS, patchTextResolution } from './render/resolution';
 
@@ -37,6 +38,6 @@ export default function StartGame(parent: string): Phaser.Game {
         // All audio is our own Web Audio synth (systems/sound.ts).
         audio: { noAudio: true },
         banner: false,
-        scene: [Boot, Home, Play, Results],
+        scene: [Boot, Home, Setup, Play, Results],
     });
 }

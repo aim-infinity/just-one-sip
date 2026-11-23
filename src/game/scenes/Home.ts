@@ -118,9 +118,11 @@ export class Home extends Phaser.Scene {
         sound.unlock();
         sound.horn();
         goFullscreen();
-        const mode = tutorial || !settings.tutorialSeen ? 'tutorial' : 'ride';
+        const tut = tutorial || !settings.tutorialSeen;
         this.cameras.main.fadeOut(220, 255, 216, 154);
-        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Play', { mode }));
+        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () =>
+            tut ? this.scene.start('Play', { mode: 'tutorial' }) : this.scene.start('Setup'),
+        );
     }
 
     update(_t: number, delta: number): void {

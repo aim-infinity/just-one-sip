@@ -3,6 +3,7 @@ import { designWidth, setupCamera } from '../render/resolution';
 import { DESIGN_HEIGHT } from '../render/palette';
 import { HAZARDS } from '../config/hazards';
 import { TUNING, speedPx } from '../config/tuning';
+import { DEFAULT_MODS, rideMods, type RideMods } from '../config/ride';
 import { randomSeed } from '../core/rng';
 import { generateRoute, Road, type Hazard } from '../core/road';
 import { computeScore } from '../core/scoring';
@@ -55,6 +56,9 @@ export class Play extends Phaser.Scene {
     private tutTimer = 0;
     private tutHazard?: Hazard;
     private tutSpillAtStart = 0;
+    private mods: RideMods = DEFAULT_MODS;
+    private lastLineAt = -99;
+    private saidFor = new Set<number>();
 
     constructor() {
         super('Play');
@@ -77,18 +81,25 @@ export class Play extends Phaser.Scene {
         setupCamera(this);
         const W = designWidth(this);
         const tutorial = this.mode === 'tutorial';
-        const route = tutorial ? undefined : generateRoute(this.seed, TUNING);
+        this.mods = tutorial ? DEFAULT_MODS : rideMods(settings.driver, settings.weather);
+        this.lastLineAt = -99;
+        this.saidFor = new Set();
+        const route = tutorial ? undefined : generateRoute(this.seed, TUNING, this.mods);
         const road = route ? new Road(route.hazards, route.lengthPx) : new Road([], Infinity);
-        this.sim = new RideSimulation(TUNING, road, { seed: this.seed, practice: tutorial });
+        this.sim = new RideSimulation(TUNING, road, { seed: this.seed, practice: tutorial, mods: this.mods });
         this.world = new WorldView(this, this.sim, W);
         this.hud = new Hud(this, W, this.sim, !tutorial);
         this.hold = new HoldInput(this);
         this.hold.onPress = () => {
             sound.unlock();
             sound.startEngine();
+            if (this.mods.weather.id === 'rainy') sound.startRain();
             if (!this.firstPress) {
                 this.firstPress = true;
-                if (!tutorial) this.hud.hideHint();
+                if (!tutorial) {
+                    this.hud.hideHint();
+                    this.time.delayedCall(400, () => this.driverSays(this.mods.driver.lines.start, true));
+                }
             }
         };
 
@@ -110,6 +121,7 @@ export class Play extends Phaser.Scene {
 
         if (tutorial) this.buildTutorial();
         if (sound.ready) sound.startEngine();
+        this.world.weather.onThunder = () => sound.thunder();
 
         const onHide = () => {
             if (document.hidden) this.setPaused(true);
@@ -124,6 +136,7 @@ export class Play extends Phaser.Scene {
             window.removeEventListener('blur', onBlur);
             window.removeEventListener('jos:restart', onRestart);
             sound.stopEngine();
+            sound.stopRain();
         });
 
         this.input.keyboard?.on('keydown-ESC', () => this.setPaused(!this.paused));
@@ -154,6 +167,7 @@ export class Play extends Phaser.Scene {
         this.hud.update();
         sound.engineLoad(Math.abs(this.sim.suspension.velocityAt(0.5)) / 300);
         if (this.mode === 'tutorial') this.updateTutorial(dt);
+        else this.overconfidentBanter();
     }
 
     private handleEvent(e: SimEvent): void {
@@ -164,22 +178,32 @@ export class Play extends Phaser.Scene {
                 sound.brake(e.severity);
                 vibrate(30);
                 if (!reduced) this.cameras.main.shake(160, 0.002 * e.severity);
-                const drv = this.world.auto.toScreen({ x: 90, y: -175 });
+                const lines = this.mods.driver.lines.braking;
                 if (e.hazard.type === 'cow') {
                     sound.horn();
                     sound.moo();
-                    this.popText('POM! POM!', P.yellow, drv);
+                    this.driverSays(['POM! POM!'], true);
                     const cowX = e.hazard.x + e.hazard.width - this.world.camX + 30;
                     this.time.delayedCall(250, () => this.popText('MOO!', 0xffffff, { x: cowX, y: 520 }));
+                } else if (e.hazard.type === 'cutIn') {
+                    sound.horn();
+                    this.driverSays(lines ?? ['Aiyyo!'], true);
                 } else {
-                    this.popText('Red light!', P.red, drv);
+                    this.driverSays(this.mods.driver.id === 'impatient' && lines ? [lines[lines.length - 1]] : ['Red light!'], true);
                 }
                 break;
             }
+            case 'skid':
+                sound.brake(0.6);
+                this.popText('Skiiid!', 0xbfe4ff, this.world.auto.toScreen({ x: 120, y: -10 }));
+                break;
+            case 'slowing':
+                if (this.mods.driver.lines.slowing && Math.random() < 0.5) this.driverSays(this.mods.driver.lines.slowing);
+                break;
             case 'go':
                 if (e.hazard.type === 'signal') {
                     sound.horn();
-                    this.popText('Green! Go go go', P.green, this.world.auto.toScreen({ x: 90, y: -175 }));
+                    this.driverSays(['Green! Go go go!'], true);
                 }
                 break;
             case 'kick':
@@ -226,10 +250,32 @@ export class Play extends Phaser.Scene {
         this.tweens.add({ targets: t, y: at.y - 70, alpha: 0, duration: 1100, ease: 'Cubic.out', onComplete: () => t.destroy() });
     }
 
+    /** Driver speech, rate-limited so it never spams. */
+    private driverSays(lines: string[] | undefined, force = false): void {
+        if (!lines?.length) return;
+        const now = this.sim.time;
+        if (!force && now - this.lastLineAt < 3) return;
+        this.lastLineAt = now;
+        this.world.say(lines[Math.floor(Math.random() * lines.length)]);
+    }
+
+    /** "Road super saar!" — said with total confidence right before a pothole. */
+    private overconfidentBanter(): void {
+        const lines = this.mods.driver.lines.beforePothole;
+        if (!lines || this.sim.state !== 'playing') return;
+        const { sec, hazard } = this.sim.timeToNextHazard();
+        if (!hazard || this.saidFor.has(hazard.id)) return;
+        if ((hazard.type === 'pothole' || hazard.type === 'waterlogged' || hazard.type === 'manhole') && sec < 1.3) {
+            this.saidFor.add(hazard.id);
+            if (this.sim.time - this.lastLineAt > 2.2) this.driverSays(lines, true);
+        }
+    }
+
     private onEnd(): void {
         this.ended = true;
         this.hold.enabled = false;
         sound.stopEngine();
+        sound.stopRain();
         const result = this.sim.result();
         const won = result.outcome === 'won';
         if (won) {
@@ -242,7 +288,7 @@ export class Play extends Phaser.Scene {
         const score = computeScore(result);
         const { best, isNewBest } = recordRide(score, result.consumedMl, won);
         this.time.delayedCall(won ? 700 : 900, () => {
-            this.scene.launch('Results', { result, score, best, isNewBest });
+            this.scene.launch('Results', { result, score, best, isNewBest, driver: this.mods.driver.id, weather: this.mods.weather.id });
             this.scene.pause();
         });
     }
@@ -255,6 +301,7 @@ export class Play extends Phaser.Scene {
         this.hold.enabled = !p;
         if (p) {
             sound.stopEngine();
+            sound.stopRain();
             this.showPauseMenu();
         } else {
             this.pauseLayer?.destroy();
@@ -388,6 +435,6 @@ export class Play extends Phaser.Scene {
     private finishTutorial(): void {
         settings.tutorialSeen = true;
         saveSettings();
-        this.scene.restart({ mode: 'ride' } satisfies PlayData);
+        this.scene.start('Setup');
     }
 }

@@ -88,27 +88,34 @@ describe('Braking hazards', () => {
     });
 });
 
-describe('Spills never block a win', () => {
-    it('finishing the bottle wins even after a big spill', () => {
+describe('Spill limit (mess meter)', () => {
+    it('spills never reduce the water you can drink', () => {
         const sim = new RideSimulation(t, new Road([], 1e9), { seed: 1 });
         sim.step(dt, false);
-        sim.bottle.spill(150);
+        sim.bottle.spill(30);
+        expect(sim.bottle.remainingMl).toBe(t.capacityMl);
         while (sim.state === 'playing') sim.step(dt, true);
         expect(sim.outcome).toBe('won');
-        expect(sim.bottle.consumedMl).toBeCloseTo(100, 5);
+        expect(sim.bottle.consumedMl).toBeCloseTo(t.capacityMl, 5);
     });
 
-    it('a ride does not end early because of spills', () => {
+    it('the ride ends as soon as the spill limit is reached', () => {
         const sim = new RideSimulation(t, new Road([], 1e9), { seed: 1 });
-        sim.bottle.spill(240);
-        for (let i = 0; i < 120; i++) sim.step(dt, false);
+        sim.step(dt, false);
+        sim.bottle.spill(t.spillLimitMl - 1);
+        sim.step(dt, false);
         expect(sim.state).toBe('playing');
-    });
-
-    it('spilling every last drop loses', () => {
-        const sim = new RideSimulation(t, new Road([], 1e9), { seed: 1 });
-        sim.bottle.spill(250);
+        sim.bottle.spill(1);
         sim.step(dt, false);
         expect(sim.outcome).toBe('spilledOut');
+        expect(sim.bottle.remainingMl).toBeGreaterThan(200);
+    });
+
+    it('practice mode resets instead of ending', () => {
+        const sim = new RideSimulation(t, new Road([], 1e9), { seed: 1, practice: true });
+        sim.bottle.spill(t.spillLimitMl + 5);
+        sim.step(dt, false);
+        expect(sim.state).toBe('playing');
+        expect(sim.bottle.spilledMl).toBe(0);
     });
 });

@@ -1,6 +1,7 @@
 import { HAZARDS } from '../config/hazards';
 import { routePx, speedPxAt, type Tuning } from '../config/tuning';
 import { BrakeController } from './brake';
+import { brakeFor, DEFAULT_MODS, type RideMods } from '../config/ride';
 import { Arm, type ArmState } from './arm';
 import { Bottle } from './bottle';
 import { CollisionTracker, type CollisionEvent, type Wheel } from './collisions';
@@ -21,6 +22,8 @@ export type SimEvent =
     | { kind: 'armState'; state: ArmState }
     | { kind: 'brake'; hazard: Hazard; severity: number }
     | { kind: 'go'; hazard: Hazard; severity: number }
+    | { kind: 'skid'; hazard: Hazard; severity: number }
+    | { kind: 'slowing'; hazard: Hazard }
     | { kind: 'end'; outcome: Outcome };
 
 export type SimState = 'playing' | 'ended';
@@ -29,6 +32,8 @@ export interface SimOptions {
     seed: number;
     /** Practice mode: never ends, bottle refills when empty. */
     practice?: boolean;
+    /** Driver + weather. Defaults to plain behaviour. */
+    mods?: RideMods;
 }
 
 /**
@@ -42,6 +47,10 @@ export class RideSimulation {
     readonly rig: PassengerRig;
     readonly collisions: CollisionTracker;
     readonly brake = new BrakeController();
+    readonly mods: RideMods;
+    /** Careful drivers ease off before bumps (1 = full speed). */
+    caution = 1;
+    private cautionFor: number | null = null;
     /** Current forward speed (px/s), including braking. */
     speed = 0;
 
@@ -70,6 +79,7 @@ export class RideSimulation {
         public readonly road: Road,
         public readonly opts: SimOptions,
     ) {
+        this.mods = opts.mods ?? DEFAULT_MODS;
         this.bottle = new Bottle(t.capacityMl);
         this.arm = new Arm(t);
         this.suspension = new Suspension(t);
@@ -95,7 +105,7 @@ export class RideSimulation {
     }
     /** Cruising speed (px/s) at the current point of the route, ignoring brakes. */
     get cruiseSpeed(): number {
-        return speedPxAt(this.t, this.progress);
+        return speedPxAt(this.t, this.progress) * this.mods.speedMul;
     }
     get remainingM(): number {
         return Math.max(0, (this.lengthPx - this.distance) / this.t.pxPerMeter);
@@ -108,8 +118,11 @@ export class RideSimulation {
         this.sinceJolt += dt;
 
         // 1. Move the auto forward along the (capped) speed curve, minus any braking.
-        if (this.brake.step(dt) === 'go') this.jolt(-HAZARDS[this.brake.hazard!.type].brake!.lurch * this.brake.hazard!.impact, 'go');
-        this.speed = this.cruiseSpeed * this.brake.factor;
+        const br = this.brake.step(dt);
+        if (br === 'go') this.jolt(-HAZARDS[this.brake.hazard!.type].brake!.lurch * this.brake.hazard!.impact, 'go');
+        if (br === 'skid') this.jolt(-0.5, 'skid');
+        this.updateCaution(dt);
+        this.speed = this.cruiseSpeed * this.brake.factor * this.caution;
         this.distance = Math.min(this.distance + this.speed * dt, this.lengthPx);
 
         // 2. World-space wheel/hazard collisions → suspension impulses.
@@ -123,22 +136,25 @@ export class RideSimulation {
                 if (bd) {
                     // Only the front wheel matters: the driver brakes for what's ahead.
                     if (ev.wheel === 'front' && !this.brake.active) {
-                        this.brake.start(ev.hazard, bd);
+                        const b = brakeFor(bd, this.mods);
+                        this.brake.start(ev.hazard, b, this.mods.weather.slippery);
                         this.events.push(ev);
-                        this.jolt(bd.jolt * ev.hazard.impact, 'brake');
+                        this.jolt(b.jolt * ev.hazard.impact, 'brake');
                     }
                     continue;
                 }
                 this.events.push(ev);
                 continue;
             }
-            const dv = ev.strength * t.kickBasePxPerSec * t.suspensionStrength;
+            // hits scale with how fast you're going (careful drivers slow down → softer)
+            const pace = (0.45 + 0.55 * Math.min(1, this.speed / Math.max(1, this.cruiseSpeed))) * this.mods.speedMul;
+            const dv = ev.strength * pace * t.kickBasePxPerSec * t.suspensionStrength;
             this.suspension.kick(ev.wheel, dv);
             const feel = ev.wheel === 'rear' ? 1 : t.frontWheelFeel;
             this.rig.kick(dv * feel);
             const rattle = HAZARDS[ev.hazard.type].rattlePx;
-            if (rattle > 0) this.rig.rattle(rattle * Math.abs(ev.strength) * feel * t.suspensionStrength);
-            const severity = Math.abs(ev.strength) * feel * t.suspensionStrength;
+            if (rattle > 0) this.rig.rattle(rattle * Math.abs(ev.strength) * pace * feel * t.suspensionStrength);
+            const severity = Math.abs(ev.strength) * pace * feel * t.suspensionStrength;
             this.events.push({ kind: 'kick', wheel: ev.wheel, hazard: ev.hazard, severity });
             if (severity > 0.15) {
                 this.sinceJolt = 0;
@@ -182,13 +198,15 @@ export class RideSimulation {
         }
         this.wasAtLips = atLips;
 
-        // 5. Win / lose. Finishing the bottle wins, however much was spilled.
+        // 5. Win / lose. Drink all of it → win. Mess meter full → ride over.
         if (this.opts.practice) {
-            if (this.bottle.isEmpty) this.bottle.refill();
+            if (this.bottle.isEmpty || this.bottle.spilledMl >= t.spillLimitMl) this.bottle.refill();
             return;
         }
-        if (this.bottle.isEmpty) {
-            this.finish(this.bottle.consumedMl >= 1 ? 'won' : 'spilledOut');
+        if (this.bottle.spilledMl >= t.spillLimitMl) {
+            this.finish('spilledOut');
+        } else if (this.bottle.isEmpty) {
+            this.finish('won');
         } else if (this.distance >= this.lengthPx) {
             this.finish('arrivedThirsty');
         }
@@ -198,7 +216,24 @@ export class RideSimulation {
      * Longitudinal jolt: + = braking (passenger thrown forward, nose dives),
      * − = pulling away (thrown back). Severity ≈ 1 for an emergency stop.
      */
-    private jolt(severity: number, kind: 'brake' | 'go'): void {
+    /** Careful drivers ease off before a bump and until the rear wheel has cleared it. */
+    private updateCaution(dt: number): void {
+        const c = this.mods.driver.caution;
+        if (!c) return;
+        const lead = this.cruiseSpeed * c.leadSec;
+        const bump = this.road.hazards.find(
+            (h) => !HAZARDS[h.type].brake && h.x + h.width > this.rearX - 10 && h.x < this.frontX + lead,
+        );
+        const target = bump ? c.slowTo : 1;
+        if (bump && this.cautionFor !== bump.id) {
+            this.cautionFor = bump.id;
+            this.events.push({ kind: 'slowing', hazard: bump });
+        }
+        const rate = target < this.caution ? 3 : 1.4;
+        this.caution += Math.sign(target - this.caution) * Math.min(Math.abs(target - this.caution), rate * dt);
+    }
+
+    private jolt(severity: number, kind: 'brake' | 'go' | 'skid'): void {
         const t = this.t;
         const s = severity * t.suspensionStrength;
         this.rig.kickX(s * t.brakeKickPxPerSec);
