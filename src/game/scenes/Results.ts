@@ -1,0 +1,124 @@
+import Phaser from 'phaser';
+import { TUNING } from '../config/tuning';
+import { headline, verdict, stars, type RideResult } from '../core/scoring';
+import { FONT, PALETTE as P } from '../render/palette';
+import { label, makeButton, panel, title } from '../render/ui';
+import type { Best } from '../systems/settings';
+import { shareResult } from '../systems/share';
+
+export interface ResultsData {
+    result: RideResult;
+    score: number;
+    best: Best;
+    isNewBest: boolean;
+}
+
+/** Overlay shown on top of the paused Play scene. */
+export class Results extends Phaser.Scene {
+    constructor() {
+        super('Results');
+    }
+
+    create(data: ResultsData): void {
+        const { result: r, score, best, isNewBest } = data;
+        const W = this.scale.width;
+        const H = this.scale.height;
+        const cx = W / 2;
+        const won = r.outcome === 'won';
+
+        this.add.rectangle(0, 0, W, H, P.ink, 0.6).setOrigin(0).setInteractive();
+        const root = this.add.container(0, 0);
+        root.add(panel(this, cx, H / 2 + 14, 860, 640, won ? 0xfff3c4 : P.cream));
+
+        const head = title(this, cx, 104, `${won ? '🎉' : '😩'}  ${headline(r)}`, 54, won ? '#ffd23f' : '#ffffff');
+        root.add(head);
+
+        const s = stars(r);
+        const starText = this.add.text(cx, 160, '★★★'.slice(0, s) + '☆☆☆'.slice(0, 3 - s), {
+            fontFamily: FONT,
+            fontSize: '40px',
+            color: '#f5a623',
+            stroke: P.inkCss,
+            strokeThickness: 5,
+        });
+        starText.setOrigin(0.5);
+        root.add(starText);
+
+        root.add(label(this, cx, 210, `“${verdict(r)}”`, 30, P.inkCss, 'italic 800').setWordWrapWidth(780));
+
+        // stat cards
+        const stats: [string, string, string][] = [
+            ['DRUNK', `${Math.floor(r.consumedMl)} ml`, '#1f6fd0'],
+            ['SPILLED', `${Math.round(r.spilledMl)} ml`, '#c0392b'],
+            ['DISTANCE', `${Math.round(r.distanceM)} m`, P.inkCss],
+        ];
+        stats.forEach(([k, v, col], i) => {
+            const x = cx + (i - 1) * 250;
+            const g = this.add.graphics();
+            g.fillStyle(0xffffff, 1);
+            g.fillRoundedRect(x - 110, 246, 220, 108, 18);
+            g.lineStyle(3, P.ink, 1);
+            g.strokeRoundedRect(x - 110, 246, 220, 108, 18);
+            root.add(g);
+            root.add(label(this, x, 274, k, 20, '#6b5b4b'));
+            root.add(label(this, x, 318, v, 42, col));
+        });
+
+        const need = won ? '' : r.outcome === 'spilledOut' ? `   ·   You needed ${TUNING.winMinConsumedMl} ml in you` : `   ·   ${Math.round(r.remainingMl)} ml still in the bottle`;
+        root.add(label(this, cx, 386, `Score ${score.toLocaleString()}${need}`, 28));
+        const bestLine = isNewBest ? '🏆 NEW PERSONAL BEST!' : `Personal best: ${best.score.toLocaleString()}`;
+        const bestText = label(this, cx, 422, bestLine, 24, isNewBest ? '#e67e22' : '#6b5b4b');
+        root.add(bestText);
+        if (isNewBest) this.tweens.add({ targets: bestText, scale: 1.12, yoyo: true, repeat: -1, duration: 500 });
+
+        const again = makeButton(this, cx, 508, 'TRY AGAIN', () => this.retry(), { width: 360, height: 90, fontSize: 40 });
+        root.add(again);
+        const share = makeButton(this, cx - 190, 614, 'Share 📤', () => this.share(r), {
+            width: 230,
+            height: 64,
+            fontSize: 26,
+            fill: 0x25d366,
+            textColor: '#ffffff',
+        });
+        const home = makeButton(this, cx + 190, 614, 'Home', () => this.home(), { width: 230, height: 64, fontSize: 26, fill: P.cream });
+        root.add([share, home]);
+
+        root.setScale(0.9).setAlpha(0);
+        root.setPosition(cx * 0.1, H * 0.05);
+        this.tweens.add({ targets: root, scale: 1, x: 0, y: 0, alpha: 1, duration: 320, ease: 'Back.out' });
+
+        this.time.delayedCall(600, () => {
+            this.input.keyboard?.once('keydown-ENTER', () => this.retry());
+            this.input.keyboard?.once('keydown-SPACE', () => this.retry());
+        });
+    }
+
+    private retry(): void {
+        this.scene.stop('Play');
+        this.scene.start('Play', { mode: 'ride' });
+    }
+
+    private home(): void {
+        this.scene.stop('Play');
+        this.scene.start('Home');
+    }
+
+    private async share(r: RideResult): Promise<void> {
+        const img = this.textures.get('autoIcon').getSourceImage() as HTMLCanvasElement;
+        const out = await shareResult(r, img);
+        const msg =
+            out === 'shared'
+                ? 'Shared! 🙌'
+                : out === 'downloaded'
+                  ? 'Result card saved + text copied 📋'
+                  : out === 'copied'
+                    ? 'Copied to clipboard 📋'
+                    : out === 'cancelled'
+                      ? ''
+                      : 'Sharing not available here';
+        if (!msg) return;
+        const t = label(this, this.scale.width / 2, this.scale.height - 30, msg, 24, '#ffffff').setDepth(10);
+        t.setStroke(P.inkCss, 6);
+        this.tweens.add({ targets: t, alpha: 0, delay: 1800, duration: 500, onComplete: () => t.destroy() });
+    }
+}

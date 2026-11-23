@@ -1,0 +1,11 @@
+{
+    "name": "Just One Sip",
+    "short_name": "One Sip",
+    "description": "Finish one water bottle in a bumpy Bangalore auto-rickshaw.",
+    "start_url": "./",
+    "display": "fullscreen",
+    "orientation": "landscape",
+    "background_color": "#ffc928",
+    "theme_color": "#ffc928",
+    "icons": [{ "src": "./favicon.png", "sizes": "any", "type": "image/png" }]
+}

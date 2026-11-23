@@ -1,0 +1,195 @@
+import { HAZARDS, type HazardType, type KickPoint } from '../config/hazards';
+import { ROUTE_LAYOUT, SECTIONS, sectionAt, type SectionConfig } from '../config/difficulty';
+import { routePx, speedPx, wheelbaseSec, type Tuning } from '../config/tuning';
+import { Rng } from './rng';
+
+export interface Hazard {
+    id: number;
+    type: HazardType;
+    /** World x of the leading edge (px). */
+    x: number;
+    width: number;
+    /** Depth/height magnitude (px). */
+    depth: number;
+    impact: number;
+    kicks: KickPoint[];
+    /** Index of the block (combo hazards share a block). */
+    block: number;
+}
+
+export const hazardEnd = (h: Hazard) => h.x + h.width;
+
+/** Vertical road displacement contributed by one hazard at world x (up = +). */
+export function hazardProfile(h: Hazard, x: number): number {
+    const u = (x - h.x) / h.width;
+    if (u <= 0 || u >= 1) return 0;
+    const shape = HAZARDS[h.type].shape;
+    if (shape === 'dip') {
+        // steep walls, flat-ish bottom
+        const s = Math.sin(Math.PI * u);
+        return -h.depth * Math.min(1, s * 1.6);
+    }
+    if (shape === 'hump') {
+        return h.depth * Math.sin(Math.PI * u) ** 1.5;
+    }
+    // ripple: several small bumps
+    return h.depth * Math.sin(Math.PI * u * 6) * Math.sin(Math.PI * u);
+}
+
+/**
+ * The road: a sorted list of hazards plus queries in world space.
+ * Hazards can be inserted during play (tutorial) as long as they are ahead.
+ */
+export class Road {
+    readonly hazards: Hazard[] = [];
+    private nextId = 1;
+
+    constructor(
+        hazards: Omit<Hazard, 'id'>[] = [],
+        public readonly lengthPx = Infinity,
+    ) {
+        hazards.forEach((h) => this.add(h));
+    }
+
+    add(h: Omit<Hazard, 'id'>): Hazard {
+        const hz: Hazard = { ...h, id: this.nextId++ };
+        let i = this.hazards.length;
+        while (i > 0 && this.hazards[i - 1].x > hz.x) i--;
+        this.hazards.splice(i, 0, hz);
+        return hz;
+    }
+
+    heightAt(x: number): number {
+        let y = 0;
+        for (const h of this.hazards) {
+            if (h.x > x) break;
+            if (hazardEnd(h) > x) y += hazardProfile(h, x);
+        }
+        return y;
+    }
+
+    /** First hazard whose leading edge is at or ahead of world x. */
+    nextHazardFrom(x: number): Hazard | undefined {
+        return this.hazards.find((h) => h.x >= x);
+    }
+}
+
+// ─── Procedural generation ─────────────────────────────────────────────────
+
+export interface RouteLayout {
+    seed: number;
+    lengthPx: number;
+    hazards: Omit<Hazard, 'id'>[];
+    /** Seconds of road where a careful player can safely drink. */
+    drinkWindowSec: number;
+    attempts: number;
+}
+
+function makeHazard(rng: Rng, type: HazardType, x: number, block: number): Omit<Hazard, 'id'> {
+    const d = HAZARDS[type];
+    return {
+        type,
+        x,
+        width: Math.round(rng.range(d.widthPx[0], d.widthPx[1])),
+        depth: rng.range(d.depthPx[0], d.depthPx[1]),
+        impact: rng.range(d.impact[0], d.impact[1]),
+        kicks: d.kicks,
+        block,
+    };
+}
+
+/** Minimum clear-road seconds after a block whose last hazard is `type`. */
+export function minClearSec(t: Tuning, type: HazardType): number {
+    return wheelbaseSec(t) + Math.max(t.reactionTimeSec, HAZARDS[type].minSpacingSec);
+}
+
+function layoutOnce(seed: number, t: Tuning, relax: number): Omit<RouteLayout, 'attempts' | 'drinkWindowSec'> {
+    const rng = new Rng(seed);
+    const v = speedPx(t);
+    const length = routePx(t);
+    // Hazards are placed in world space; the front wheel starts at wheelbasePx.
+    const end = length + t.wheelbasePx - ROUTE_LAYOUT.finishClearSec * v;
+    const hazards: Omit<Hazard, 'id'>[] = [];
+    let x = t.wheelbasePx + ROUTE_LAYOUT.firstHazardSec * v;
+    let block = 0;
+
+    while (x < end) {
+        const section: SectionConfig = sectionAt((x - t.wheelbasePx) / length);
+        const type = rng.weighted(section.weights);
+        const first = makeHazard(rng, type, x, block);
+        if (first.x + first.width > end) break;
+        hazards.push(first);
+        let last = first;
+
+        if (section.comboChance > 0 && rng.chance(section.comboChance)) {
+            const comboType = rng.pick<HazardType>(['pothole', 'uneven', 'speedBreaker']);
+            const cx = last.x + last.width + t.comboGapSec * v;
+            const second = makeHazard(rng, comboType, cx, block);
+            if (second.x + second.width < end) {
+                hazards.push(second);
+                last = second;
+            }
+        }
+
+        block++;
+        const wantSafe = section.safeEvery > 0 && block % section.safeEvery === 0;
+        let gap = wantSafe ? section.safeGapSec : rng.range(section.gapSec[0], section.gapSec[1]);
+        gap = Math.max(gap * t.obstacleSpacingScale * relax, minClearSec(t, last.type));
+        x = last.x + last.width + gap * v;
+    }
+    return { seed, lengthPx: length, hazards };
+}
+
+/**
+ * Estimate how many seconds of genuinely safe drinking a layout offers:
+ * time between blocks, minus wheelbase traversal, settling and arm raise.
+ */
+export function drinkWindowSec(hazards: Omit<Hazard, 'id'>[], t: Tuning, lengthPx = routePx(t)): number {
+    const v = speedPx(t);
+    const raise = t.raiseMs / 1000;
+    const margin = 0.1;
+    // Group into blocks
+    const blocks: { start: number; end: number }[] = [];
+    for (const h of hazards) {
+        const b = blocks[blocks.length - 1];
+        if (b && h.x - b.end < t.comboGapSec * v * 1.5) b.end = Math.max(b.end, h.x + h.width);
+        else blocks.push({ start: h.x, end: h.x + h.width });
+    }
+    let total = 0;
+    // Before first block: from start (front wheel at wheelbase) to first block.
+    let freeFrom = t.wheelbasePx; // front wheel world x where road is clear
+    for (const b of blocks) {
+        const sec = (b.start - freeFrom) / v - raise - margin;
+        total += Math.max(0, sec);
+        // rear wheel must clear the block, then settle
+        freeFrom = b.end + t.wheelbasePx + t.settleSec * v;
+    }
+    const finish = lengthPx + t.wheelbasePx;
+    total += Math.max(0, (finish - freeFrom) / v - raise);
+    return total;
+}
+
+export function requiredDrinkSec(t: Tuning): number {
+    return t.capacityMl / t.drinkRateMlPerSec;
+}
+
+/**
+ * Seeded, constrained generator. Retries with derived seeds until the layout
+ * guarantees enough safe drinking time; relaxes spacing as a last resort.
+ */
+export function generateRoute(seed: number, t: Tuning): RouteLayout {
+    const need = requiredDrinkSec(t) * ROUTE_LAYOUT.minDrinkWindowRatio;
+    let best: RouteLayout | undefined;
+    for (let attempt = 0; attempt < ROUTE_LAYOUT.maxAttempts; attempt++) {
+        const relax = attempt < ROUTE_LAYOUT.maxAttempts / 2 ? 1 : 1 + (attempt - ROUTE_LAYOUT.maxAttempts / 2) * 0.08;
+        const s = (seed + attempt * 7919) >>> 0;
+        const layout = layoutOnce(s, t, relax);
+        const window = drinkWindowSec(layout.hazards, t, layout.lengthPx);
+        const candidate: RouteLayout = { ...layout, seed, drinkWindowSec: window, attempts: attempt + 1 };
+        if (window >= need) return candidate;
+        if (!best || window > best.drinkWindowSec) best = candidate;
+    }
+    return best!;
+}
+
+export { SECTIONS };

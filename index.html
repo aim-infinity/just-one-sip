@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/png" href="./favicon.png" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+        <meta name="theme-color" content="#ffc928" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="description" content="You're in a Bangalore auto with a 250 ml bottle. Finish it before your stop. The potholes have other plans. A one-touch browser game." />
+        <meta property="og:title" content="Just One Sip 🛺💧" />
+        <meta property="og:description" content="Finish one water bottle in a bumpy Bangalore auto-rickshaw. Hold to sip, let go before the potholes." />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="./og.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <link rel="manifest" href="./manifest.webmanifest" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&display=swap" rel="stylesheet" />
+        <link rel="stylesheet" href="./style.css" />
+        <title>Just One Sip — a Bangalore auto-rickshaw game</title>
+    </head>
+    <body>
+        <div id="app">
+            <div id="game-container"></div>
+        </div>
+        <div id="loading">
+            <div class="spinner">🛺</div>
+            <p>Starting the auto…</p>
+        </div>
+        <div id="rotate" aria-live="polite">
+            <div class="phone">📱</div>
+            <h2>Rotate your phone</h2>
+            <p>Just One Sip plays in landscape.<br />The road is wide and so are the potholes.</p>
+        </div>
+        <noscript>Just One Sip needs JavaScript to run.</noscript>
+        <script type="module" src="/src/main.ts"></script>
+    </body>
+</html>
