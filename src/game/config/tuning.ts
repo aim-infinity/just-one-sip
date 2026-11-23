@@ -49,6 +49,9 @@ export const TUNING = {
     lowerMs: 250,
     /** Arm progress (0..1) at which water can flow — i.e. bottle is at the lips. */
     mouthThreshold: 0.98,
+    /** Arm progress at or above which a massive-pothole rebound ejects the passenger
+     *  ("at the lips, or nearly there"). Releasing ~60 ms before the rebound is safe. */
+    ejectArmThreshold: 0.75,
 
     // ── Suspension (auto body) ──────────────────────────────────────────
     /** Spring stiffness of each wheel corner (1/s²). */

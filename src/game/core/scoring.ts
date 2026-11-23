@@ -1,4 +1,4 @@
-export type Outcome = 'won' | 'arrivedThirsty' | 'spilledOut';
+export type Outcome = 'won' | 'arrivedThirsty' | 'spilledOut' | 'ejected';
 
 export interface RideResult {
     outcome: Outcome;
@@ -39,6 +39,8 @@ export function headline(r: RideResult): string {
             return 'BOTTLE FINISHED!';
         case 'spilledOut':
             return 'TOO MANY SPLASHES!';
+        case 'ejected':
+            return 'FLIGHT MODE ON!';
         default:
             return 'ARRIVED THIRSTY';
     }
@@ -52,6 +54,8 @@ export function verdict(r: RideResult): string {
         if (s < 1) pool.push('Not a single drop wasted. Smooth sipper!', 'Perfect ride. The potholes never stood a chance.');
         else if (s < 15) pool.push('Hydrated and happy. Nicely timed!', 'Bottle done, shirt (mostly) dry.');
         else pool.push('Bottle done! Your shirt had a sip too.', 'You made it, splashes and all.');
+    } else if (r.outcome === 'ejected') {
+        pool.push('Bro unlocked flight mode.', 'Lower the bottle before the BIG ones!', 'Next stop: low Earth orbit.', 'The roof had one job.');
     } else if (r.outcome === 'spilledOut') {
         pool.push('The bumps won this round. Try again!', 'Too many splashes this time. Lower before the bumps!', 'Soaked, but not defeated. One more ride?');
     } else if (r.remainingMl < 30) {

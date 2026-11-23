@@ -1,5 +1,5 @@
 import { HAZARDS, type HazardType, type KickPoint } from '../config/hazards';
-import { ROUTE_LAYOUT, SECTIONS, sectionAt, type SectionConfig } from '../config/difficulty';
+import { MASSIVE_POTHOLE, ROUTE_LAYOUT, SECTIONS, sectionAt, type SectionConfig } from '../config/difficulty';
 import { DEFAULT_MODS, sectionWeights, type RideMods } from '../config/ride';
 import { progressAtFront, routePx, speedPxAt, type Tuning } from '../config/tuning';
 import { Rng } from './rng';
@@ -125,9 +125,29 @@ export function minClearSec(t: Tuning, type: HazardType, v: number): number {
     return t.wheelbasePx / v + Math.max(t.reactionTimeSec, HAZARDS[type].minSpacingSec);
 }
 
-function layoutOnce(seed: number, t: Tuning, relax: number, mods: RideMods): Omit<RouteLayout, 'attempts' | 'drinkWindowSec'> {
+/** Whether a ride gets a massive pothole: 'random' (rare), 'always' (QA / ?massive), 'never'. */
+export type MassiveMode = 'random' | 'always' | 'never';
+
+export interface RouteOptions {
+    massive?: MassiveMode;
+}
+
+/** Route progress at which the massive pothole goes, or null for none. Own RNG stream. */
+export function planMassive(seed: number, mode: MassiveMode = 'random'): number | null {
+    if (mode === 'never') return null;
+    const rng = new Rng((seed ^ 0x5bd1e995) >>> 0);
+    const roll = rng.next();
+    if (mode === 'random' && roll >= MASSIVE_POTHOLE.chance) return null;
+    const [a, b] = MASSIVE_POTHOLE.window;
+    return rng.range(a, b);
+}
+
+function layoutOnce(seed: number, t: Tuning, relax: number, mods: RideMods, opts: RouteOptions = {}): Omit<RouteLayout, 'attempts' | 'drinkWindowSec'> {
     const mul = mods.speedMul;
     const rng = new Rng(seed);
+    const massiveAt = planMassive(seed, opts.massive);
+    let massivePlaced = false;
+    let prevEnd = t.wheelbasePx;
     const length = routePx(t);
     // Hazards are placed in world space; the front wheel starts at wheelbasePx.
     const finish = length + t.wheelbasePx;
@@ -138,13 +158,19 @@ function layoutOnce(seed: number, t: Tuning, relax: number, mods: RideMods): Omi
 
     while (x < end) {
         const section: SectionConfig = sectionAt(progressAtFront(t, x));
-        const type = rng.weighted(sectionWeights(section, mods));
+        const massive = massiveAt !== null && !massivePlaced && progressAtFront(t, x) >= massiveAt;
+        if (massive) {
+            // guarantee a long clear run-up so it's visible and avoidable
+            x = Math.max(x, prevEnd + MASSIVE_POTHOLE.leadSec * frontSpeed(t, prevEnd, mul));
+            massivePlaced = true;
+        }
+        const type: HazardType = massive ? 'massivePothole' : rng.weighted(sectionWeights(section, mods));
         const first = makeHazard(rng, type, x, block, t, mul);
         if (first.x + first.width > end) break;
         hazards.push(first);
         let last = first;
 
-        if (HAZARDS[type].comboable && section.comboChance > 0 && rng.chance(section.comboChance)) {
+        if (!massive && HAZARDS[type].comboable && section.comboChance > 0 && rng.chance(section.comboChance)) {
             const comboType = rng.pick(COMBO_TYPES);
             const cx = last.x + last.width + t.comboGapSec * frontSpeed(t, last.x, mul);
             const second = makeHazard(rng, comboType, cx, block, t, mul);
@@ -159,7 +185,9 @@ function layoutOnce(seed: number, t: Tuning, relax: number, mods: RideMods): Omi
         const wantSafe = section.safeEvery > 0 && block % section.safeEvery === 0;
         let gap = wantSafe ? section.safeGapSec : rng.range(section.gapSec[0], section.gapSec[1]);
         gap = Math.max(gap * t.obstacleSpacingScale * relax, minClearSec(t, last.type, v));
-        x = last.x + last.width + gap * v;
+        if (massive) gap = Math.max(gap, MASSIVE_POTHOLE.trailSec);
+        prevEnd = last.x + last.width;
+        x = prevEnd + gap * v;
     }
     return { seed, lengthPx: length, hazards };
 }
@@ -200,13 +228,13 @@ export function requiredDrinkSec(t: Tuning): number {
  * Seeded, constrained generator. Retries with derived seeds until the layout
  * guarantees enough safe drinking time; relaxes spacing as a last resort.
  */
-export function generateRoute(seed: number, t: Tuning, mods: RideMods = DEFAULT_MODS): RouteLayout {
+export function generateRoute(seed: number, t: Tuning, mods: RideMods = DEFAULT_MODS, opts: RouteOptions = {}): RouteLayout {
     const need = requiredDrinkSec(t) * ROUTE_LAYOUT.minDrinkWindowRatio;
     let best: RouteLayout | undefined;
     for (let attempt = 0; attempt < ROUTE_LAYOUT.maxAttempts; attempt++) {
         const relax = attempt < ROUTE_LAYOUT.maxAttempts / 2 ? 1 : 1 + (attempt - ROUTE_LAYOUT.maxAttempts / 2) * 0.08;
         const s = (seed + attempt * 7919) >>> 0;
-        const layout = layoutOnce(s, t, relax, mods);
+        const layout = layoutOnce(s, t, relax, mods, opts);
         const window = drinkWindowSec(layout.hazards, t, layout.lengthPx, mods.speedMul);
         const candidate: RouteLayout = { ...layout, seed, drinkWindowSec: window, attempts: attempt + 1 };
         if (window >= need) return candidate;

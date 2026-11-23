@@ -64,6 +64,22 @@ export const ROUTE_LAYOUT = {
     maxAttempts: 24,
 };
 
+/**
+ * The massive pothole (passenger-ejection easter egg). Never part of the
+ * weighted section mix: at most one per ride, decided by its own RNG stream
+ * so it doesn't reshuffle the rest of a seed's layout.
+ */
+export const MASSIVE_POTHOLE = {
+    /** Chance a ride contains one. */
+    chance: 0.25,
+    /** Route progress window where it may appear (keeps it out of the opening). */
+    window: [0.4, 0.8] as [number, number],
+    /** Clear road before it (s), so it's on screen and readable well before impact. */
+    leadSec: 1.8,
+    /** Clear road after it (s). */
+    trailSec: 1.6,
+};
+
 export function sectionAt(progress: number): SectionConfig {
     for (const s of SECTIONS) if (progress < s.until) return s;
     return SECTIONS[SECTIONS.length - 1];

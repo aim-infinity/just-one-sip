@@ -11,9 +11,9 @@ export type EndPose = 'won' | 'spilledOut' | 'arrivedThirsty';
 type V = { x: number; y: number };
 
 // Passenger geometry in auto-local space (origin = axle midpoint, y down).
-const HIP: V = { x: -100, y: -90 };
-const SHOULDER: V = { x: -92, y: -126 };
-const HEAD: V = { x: -86, y: -150 };
+export const HIP: V = { x: -100, y: -90 };
+export const SHOULDER: V = { x: -92, y: -126 };
+export const HEAD: V = { x: -86, y: -150 };
 const MOUTH_OFF: V = { x: 14, y: 5 };
 const HAND_DOWN: V = { x: -64, y: -98 };
 const HAND_UP: V = { x: -46, y: -150 };
@@ -105,10 +105,18 @@ export class AutoView {
     private driverHead: Phaser.GameObjects.Image;
     private pax: Phaser.GameObjects.Graphics;
     private arm: Phaser.GameObjects.Graphics;
+    /** The canopy (its own layer so it can break open). */
+    readonly roof: Phaser.GameObjects.Image;
+    /**
+     * Set when the passenger is launched: the seated passenger and drinking
+     * arm stop drawing, and the EjectionController's flyer takes over.
+     */
+    ejected = false;
 
     /** Last computed positions (auto-local) — used by effects. */
     mouthLocal: V = { x: 0, y: 0 };
     tipLocal: V = { x: 0, y: 0 };
+    handLocal: V = { x: 0, y: 0 };
     bottleAngle = 0;
 
     constructor(scene: Phaser.Scene) {
@@ -118,11 +126,12 @@ export class AutoView {
         const ox = AUTO_TEX.ox / AUTO_TEX.w;
         const oy = AUTO_TEX.oy / AUTO_TEX.h;
         const back = scene.add.image(0, 0, 'autoBack').setOrigin(ox, oy).setScale(TEX_SCALE);
+        this.roof = scene.add.image(0, 0, 'autoRoof').setOrigin(ox, oy).setScale(TEX_SCALE);
         this.driverHead = scene.add.image(82, -152, 'driverHead').setScale(TEX_SCALE);
         this.pax = scene.add.graphics();
         const front = scene.add.image(0, 0, 'autoFront').setOrigin(ox, oy).setScale(TEX_SCALE);
         this.arm = scene.add.graphics();
-        this.container = scene.add.container(0, 0, [back, this.driverHead, this.pax, front, this.arm]).setDepth(10);
+        this.container = scene.add.container(0, 0, [back, this.roof, this.driverHead, this.pax, front, this.arm]).setDepth(10);
     }
 
     /** Converts an auto-local point to screen space. */
@@ -173,8 +182,26 @@ export class AutoView {
         if (this.endPose === 'won') this.driverHead.rotation = Math.sin(this.endT * 14) * 0.16;
         else if (this.endPose) this.driverHead.rotation = 0.12;
 
+        if (this.ejected) {
+            // the driver stares up at the hole where his passenger used to be
+            this.driverHead.rotation = -0.22 + Math.sin(sim.time * 20) * 0.03;
+            this.pax.clear();
+            this.arm.clear();
+            return;
+        }
         this.drawPassenger(sim, pose);
         this.drawArmAndBottle(sim);
+    }
+
+    /** Auto-local positions of the seated passenger right now (for the launch). */
+    seatedPose(sim: RideSimulation): { hip: V; head: V; hand: V; bottleAngle: number } {
+        const rig = sim.rig;
+        return {
+            hip: { ...HIP },
+            head: { x: HEAD.x + rig.headX.pos, y: HEAD.y - rig.headOffset },
+            hand: { ...this.handLocal },
+            bottleAngle: this.bottleAngle,
+        };
     }
 
     private drawPassenger(sim: RideSimulation, pose: AutoPose): void {
@@ -406,6 +433,7 @@ export class AutoView {
             angle = lerp(angle, ang);
         }
         this.bottleAngle = angle;
+        this.handLocal = hand;
         this.tipLocal = add(hand, rot(BOTTLE_TIP, angle));
 
         // two-bone IK, elbow bends downward

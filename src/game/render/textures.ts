@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Rng } from '../core/rng';
 import { PALETTE as P } from './palette';
-import { AUTO_TEX, COW_TEX, SCOOTER_TEX, drawAutoBack, drawAutoFront, drawDriverHead, drawScooter, drawWheel, drawZebu } from './autoArt';
+import { AUTO_TEX, COW_TEX, SCOOTER_TEX, drawAutoBack, drawAutoFront, drawAutoRoof, drawDriverHead, drawScooter, drawWheel, drawZebu } from './autoArt';
 import { RS } from './resolution';
 
 /**
@@ -410,6 +410,7 @@ export function makeTextures(scene: Phaser.Scene): void {
     canvasTex(scene, 'road', 512, 220, (c) => drawRoad(c, 512));
     canvasTex(scene, 'wheel', 64, 64, drawWheel);
     canvasTex(scene, 'autoBack', AUTO_TEX.w, AUTO_TEX.h, drawAutoBack);
+    canvasTex(scene, 'autoRoof', AUTO_TEX.w, AUTO_TEX.h, drawAutoRoof);
     canvasTex(scene, 'autoFront', AUTO_TEX.w, AUTO_TEX.h, drawAutoFront);
     canvasTex(scene, 'zebu', COW_TEX.w, COW_TEX.h, drawZebu);
     canvasTex(scene, 'driverHead', 44, 44, drawDriverHead);
@@ -449,6 +450,7 @@ export function makeTextures(scene: Phaser.Scene): void {
         const W = AUTO_TEX.w;
         const H = AUTO_TEX.h;
         c.drawImage(src('autoBack'), 0, 0, W, H);
+        c.drawImage(src('autoRoof'), 0, 0, W, H);
         c.drawImage(src('driverHead'), AUTO_TEX.ox + 60, AUTO_TEX.oy - 174, 44, 44);
         c.drawImage(src('wheel'), AUTO_TEX.ox - 95 - 32, AUTO_TEX.oy - 32, 64, 64);
         c.drawImage(src('wheel'), AUTO_TEX.ox + 95 - 32, AUTO_TEX.oy - 32, 64, 64);

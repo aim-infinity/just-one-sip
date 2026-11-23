@@ -93,7 +93,7 @@ export class Results extends Phaser.Scene {
             root.add(label(this, x, 318, v, 42, col));
         });
 
-        const need = won ? '' : r.outcome === 'spilledOut' ? '   ·   Every drop went on the floor' : `   ·   ${Math.round(r.remainingMl)} ml still in the bottle`;
+        const need = won ? '' : r.outcome === 'ejected' ? '   ·   Left via the roof' : r.outcome === 'spilledOut' ? '   ·   Every drop went on the floor' : `   ·   ${Math.round(r.remainingMl)} ml still in the bottle`;
         root.add(label(this, cx, 386, `Score ${score.toLocaleString()}${need}`, 28));
         const bestLine = isNewBest ? '🏆 NEW PERSONAL BEST!' : `Personal best: ${best.score.toLocaleString()}`;
         const bestText = label(this, cx, 422, bestLine, 24, isNewBest ? '#e67e22' : '#6b5b4b');

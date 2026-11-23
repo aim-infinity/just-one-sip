@@ -363,6 +363,92 @@ function drawCow(scene: Phaser.Scene, h: Hazard, root: Phaser.GameObjects.Contai
     };
 }
 
+/**
+ * The massive pothole: a crater several times the size of a normal one, with
+ * smashed slabs, exposed rebar, a striped barricade on the far side and a
+ * blinking warning lamp, so it never reads as "just another pothole".
+ */
+function drawMassivePothole(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, h: Hazard, root: Phaser.GameObjects.Container): (t: number) => void {
+    const w = h.width;
+    // top-down: a huge dark crater eating most of the lane, with a broken grey rim
+    g.fillStyle(0x6a6c72, 1);
+    g.fillEllipse(w / 2, G + 16, w + 70, 50);
+    g.fillStyle(0x0d0e10, 1);
+    g.fillEllipse(w / 2, G + 17, w + 34, 38);
+    // cross-section: deep, steep and dark
+    bowl(g, h, 0x0b0c0e, 1.75);
+    // muddy water glinting at the bottom
+    const bottom = G + h.depth * 1.75;
+    g.fillStyle(0x3b3a34, 1);
+    g.fillEllipse(w / 2, bottom - 7, w * 0.55, 10);
+    g.lineStyle(2, 0x8fa9bd, 0.8);
+    g.lineBetween(w * 0.34, bottom - 9, w * 0.5, bottom - 9);
+    // smashed asphalt slabs tipped up on both lips
+    g.fillStyle(0x5a5c62, 1);
+    g.lineStyle(3, P.ink, 1);
+    const slab = (pts: number[][]) => {
+        const v = pts.map(([x, y]) => ({ x, y }));
+        g.fillPoints(v, true);
+        g.strokePoints(v, true);
+    };
+    slab([[-26, G], [-4, G], [-8, G - 14], [-22, G - 9]]);
+    slab([[-40, G + 2], [-28, G + 2], [-32, G - 6]]);
+    slab([[w + 4, G], [w + 30, G], [w + 22, G - 12], [w + 8, G - 16]]);
+    slab([[w + 32, G + 2], [w + 46, G + 2], [w + 40, G - 7]]);
+    // bent rebar sticking out of the far wall
+    g.lineStyle(3, 0xb5562e, 1);
+    g.lineBetween(w - 6, G + 10, w - 20, G - 8);
+    g.lineBetween(w - 20, G - 8, w - 30, G - 4);
+    g.lineBetween(10, G + 14, 22, G - 4);
+    // long cracks radiating across the road
+    g.lineStyle(2.5, 0x2a2b2f, 1);
+    g.lineBetween(-30, G + 6, -64, G + 22);
+    g.lineBetween(-64, G + 22, -80, G + 18);
+    g.lineBetween(w + 40, G + 4, w + 74, G + 18);
+    g.lineBetween(w * 0.3, G + 14, w * 0.18, FAR + 4);
+    g.lineBetween(w * 0.7, G + 14, w * 0.85, FAR + 2);
+
+    // striped barricade on the far side of the road (the auto passes in front)
+    const bx = w / 2 - 50;
+    const by = FAR - 46;
+    g.fillStyle(0x3a3a3a, 1);
+    g.fillRect(bx + 8, by + 14, 6, 40);
+    g.fillRect(bx + 86, by + 14, 6, 40);
+    g.fillStyle(0xffffff, 1);
+    g.fillRect(bx, by, 100, 18);
+    g.fillStyle(P.red, 1);
+    for (let i = 0; i < 5; i++) g.fillTriangle(bx + i * 20, by + 18, bx + i * 20 + 10, by, bx + i * 20 + 20, by + 18);
+    g.lineStyle(3, P.ink, 1);
+    g.strokeRect(bx, by, 100, 18);
+    // warning sign on the approach: big yellow triangle with "!"
+    const sx = -70;
+    const sy = FAR - 72;
+    g.fillStyle(0x6b6b6b, 1);
+    g.fillRect(sx - 3, sy + 20, 6, 70);
+    g.fillStyle(P.yellow, 1);
+    g.fillTriangle(sx - 30, sy + 26, sx + 30, sy + 26, sx, sy - 26);
+    g.lineStyle(4, P.ink, 1);
+    g.strokeTriangle(sx - 30, sy + 26, sx + 30, sy + 26, sx, sy - 26);
+    const bang = scene.add.text(sx, sy + 6, '!', { fontFamily: FONT, fontSize: '34px', color: P.inkCss, fontStyle: '800' }).setOrigin(0.5);
+    root.add(bang);
+    // blinking amber lamp on the barricade
+    const lamp = scene.add.graphics();
+    root.add(lamp);
+    return (t: number) => {
+        const on = Math.sin(t * 9) > 0;
+        lamp.clear();
+        lamp.fillStyle(on ? 0xffb020 : 0x7a5a20, 1);
+        lamp.fillCircle(bx + 50, by - 8, 7);
+        lamp.lineStyle(2.5, P.ink, 1);
+        lamp.strokeCircle(bx + 50, by - 8, 7);
+        if (on) {
+            lamp.fillStyle(0xffd27a, 0.35);
+            lamp.fillCircle(bx + 50, by - 8, 16);
+        }
+        bang.setScale(1 + (on ? 0.08 : 0));
+    };
+}
+
 export function createHazardView(scene: Phaser.Scene, h: Hazard, weather?: WeatherProfile): HazardView {
     const g = scene.add.graphics();
     const root = scene.add.container(0, 0, [g]);
@@ -372,6 +458,12 @@ export function createHazardView(scene: Phaser.Scene, h: Hazard, weather?: Weath
         case 'pothole':
             drawPothole(g, h);
             break;
+        case 'massivePothole': {
+            const anim = drawMassivePothole(scene, g, h, root);
+            update = (_s, t) => anim(t);
+            lights = () => [{ x: h.width / 2, y: FAR - 54, r: 60 }];
+            break;
+        }
         case 'waterlogged': {
             const anim = drawWaterlogged(g, h, root);
             update = (_s, t) => anim(t);

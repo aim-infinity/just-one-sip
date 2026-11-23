@@ -382,6 +382,25 @@ export function drawAutoFront(c: Ctx): void {
     rr(c, 139, -132, 7, 12, 3);
     c.fill();
 
+    // white grab rod (with angled brace) between driver and passenger
+    c.strokeStyle = WHITE;
+    c.lineWidth = 4;
+    c.beginPath();
+    c.moveTo(42, -168);
+    c.lineTo(42, -82);
+    c.moveTo(42, -150);
+    c.lineTo(30, -168);
+    c.stroke();
+    c.restore();
+}
+
+/**
+ * The canopy, as its own texture so it can break open when the passenger is
+ * launched through it (see RoofBreakEffect). Drawn right above autoBack.
+ */
+export function drawAutoRoof(c: Ctx): void {
+    c.save();
+    c.translate(AUTO_TEX.ox, AUTO_TEX.oy);
     // ── canopy: flat black roof sloping down to the front ──
     c.beginPath();
     c.moveTo(-172, -150);
@@ -414,17 +433,17 @@ export function drawAutoFront(c: Ctx): void {
         c.fill();
     }
 
-    // white grab rod (with angled brace) between driver and passenger
-    c.strokeStyle = WHITE;
-    c.lineWidth = 4;
-    c.beginPath();
-    c.moveTo(42, -168);
-    c.lineTo(42, -82);
-    c.moveTo(42, -150);
-    c.lineTo(30, -168);
-    c.stroke();
     c.restore();
 }
+
+/** Canopy geometry (art space) used by the roof-break effect. */
+export const ROOF = {
+    /** Top / underside of the canopy band above the passenger. */
+    top: -192,
+    bottom: -168,
+    fill: 0x221f1e,
+    highlight: 0x4a4644,
+};
 
 // ─── Wheel ─────────────────────────────────────────────────────────────────
 

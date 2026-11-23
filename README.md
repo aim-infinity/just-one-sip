@@ -10,6 +10,8 @@ Sip on smooth road, lower before bumps.
 - **Spills never take water away from you.** They fill a separate mess meter; at
   **50 ml spilled** the ride ends.
 - **Lose:** mess meter full, or reaching your stop with water left.
+- **Lose (spectacularly):** drink through a *massive pothole* and the passenger is launched
+  through the roof. *Bro unlocked flight mode.*
 
 Before each ride, pick a **driver** and the **weather** (*Choose your ride* screen):
 
@@ -30,6 +32,7 @@ The auto speeds up from 6 to a capped 9 m/s over the ~40 s ride. Road blockers:
 | Blocker | What it does |
 | --- | --- |
 | Pothole | Front wheel dips and rebounds, then the rear follows |
+| Massive pothole | Rare (≈1 in 4 rides, at most one, never in the opening or tutorial), marked by a barricade, blinking lamp and ⚠ sign. Lowered bottle: a big bounce. Bottle up at the rebound: passenger ejected through the roof, ride over |
 | Speed breaker | Slow rolling rise, then a jolt as the auto comes down |
 | Waterlogged pothole | Looks the same every time, but its hidden depth varies from shallow to brutal |
 | Repair patch | Small vibrations: you can usually keep sipping |
@@ -61,6 +64,7 @@ Handy URL parameters (work in production too):
 | ----------- | ------------------------------------------------ |
 | `?seed=123` | Replay an exact road layout (deterministic)      |
 | `?debug`    | Show the tuning/debug panel in a production build |
+| `?massive`  | Always put a massive pothole on the route (QA for the ejection) |
 
 Reset the tutorial or best score by clearing `localStorage` keys `jos.settings.v1` / `jos.best.v1`.
 
@@ -137,6 +141,7 @@ src/
       arm.ts                 hold/release arm state machine (400 ms up, 250 ms down)
       drinking.ts            flow into mouth, miss-spill, slosh on jolts
       bottle.ts              remaining / consumed / spilled bookkeeping (conserved)
+                             (simulation.ts also owns the PASSENGER_EJECTED state)
       scoring.ts             score, stars, funny verdicts
       spring.ts, rng.ts      damped spring, mulberry32 PRNG
     systems/
@@ -152,6 +157,8 @@ src/
       AutoView.ts            auto, wheels, driver, passenger, IK arm, bottle + water level
       WorldView.ts           composes the world + passenger mood logic
       SplashFx.ts            pooled droplet particles
+      EjectionController.ts  passenger-ejection sequence: flight, bottle, camera follow, sky
+      RoofBreakEffect.ts     canopy stretch, crop-open hole, torn flaps, fragments
       Hud.ts, ui.ts          HUD and reusable buttons/panels
     scenes/
       Boot → Home → Play (ride | tutorial) → Results (overlay)
@@ -199,6 +206,9 @@ the whole way usually loses.
 | How much bumps break alignment          | `tuning.ts` → `head*`, `hand*`, `alignTolerancePx` |
 | Spill amounts                           | `tuning.ts` → `sloshMlPerImpact`, `missSpillMlPerSec`, `spillSensitivity` |
 | Individual hazards                      | `hazards.ts`                                       |
+| Massive pothole rarity / run-up         | `difficulty.ts` → `MASSIVE_POTHOLE`                |
+| Ejection threshold (how raised = launch) | `tuning.ts` → `ejectArmThreshold`                 |
+| Ejection animation timings              | `render/EjectionController.ts` → `EJECT_TIMING`    |
 | Difficulty curve                        | `difficulty.ts`                                    |
 
 After changing balance, run `npm run balance` to see scripted-player win rates and `npm test`.
@@ -206,7 +216,8 @@ After changing balance, run `npm run balance` to see scripted-player win rates a
 ## Replacing the placeholder art
 
 All art is drawn procedurally at boot in `src/game/render/textures.ts`, keyed by name:
-`sky, sun, cloud, skyline, midrow, props, road, wheel, autoBack, autoFront, driverHead, zebu, autoIcon`.
+`sky, sun, cloud, skyline, midrow, props, road, wheel, autoBack, autoRoof, autoFront, driverHead, zebu, autoIcon`.
+The canopy (`autoRoof`) is a separate layer so it can break open; keep it separate if you swap in sprites.
 The auto, wheel and cow art lives in `src/game/render/autoArt.ts`; hazard art in `src/game/render/hazardArt.ts`.
 Textures are drawn at the device's render scale (`render/resolution.ts`) and displayed with `TEX_SCALE`.
 

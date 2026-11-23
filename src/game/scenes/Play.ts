@@ -6,15 +6,16 @@ import { TUNING, speedPx } from '../config/tuning';
 import { DEFAULT_MODS, rideMods, type RideMods } from '../config/ride';
 import { randomSeed } from '../core/rng';
 import { generateRoute, Road, type Hazard } from '../core/road';
-import { computeScore } from '../core/scoring';
+import { computeScore, type RideResult } from '../core/scoring';
 import { RideSimulation, type SimEvent } from '../core/simulation';
+import { EjectionController } from '../render/EjectionController';
 import { Hud } from '../render/Hud';
 import { FONT, PALETTE as P } from '../render/palette';
 import { drawPauseIcon, drawSpeaker, label, makeButton, makeIconButton, panel, title } from '../render/ui';
 import { WorldView } from '../render/WorldView';
 import { vibrate } from '../systems/haptics';
 import { HoldInput } from '../systems/input';
-import { recordRide, saveSettings, settings } from '../systems/settings';
+import { recordRide, saveSettings, settings, type Best } from '../systems/settings';
 import { sound } from '../systems/sound';
 
 export interface PlayData {
@@ -28,6 +29,11 @@ const MAX_STEPS_PER_FRAME = 15;
 
 export function isPortraitMobile(): boolean {
     return window.innerHeight > window.innerWidth && matchMedia('(pointer: coarse)').matches;
+}
+
+/** ?massive forces a massive pothole onto the route (QA for the ejection event). */
+function urlMassive(): boolean {
+    return new URLSearchParams(location.search).has('massive');
 }
 
 /** Reads ?seed=123 from the URL for reproducible debugging runs. */
@@ -59,6 +65,8 @@ export class Play extends Phaser.Scene {
     private mods: RideMods = DEFAULT_MODS;
     private lastLineAt = -99;
     private saidFor = new Set<number>();
+    private ejection?: EjectionController;
+    private topButtons: Phaser.GameObjects.Container[] = [];
 
     constructor() {
         super('Play');
@@ -75,16 +83,19 @@ export class Play extends Phaser.Scene {
         this.tutStep = 'hold';
         this.tutTimer = 0;
         this.tutHazard = undefined;
+        this.ejection = undefined;
     }
 
     create(): void {
         setupCamera(this);
+        // an ejection leaves the camera scrolled up / shaking: always start clean
+        this.cameras.main.resetFX();
         const W = designWidth(this);
         const tutorial = this.mode === 'tutorial';
         this.mods = tutorial ? DEFAULT_MODS : rideMods(settings.driver, settings.weather);
         this.lastLineAt = -99;
         this.saidFor = new Set();
-        const route = tutorial ? undefined : generateRoute(this.seed, TUNING, this.mods);
+        const route = tutorial ? undefined : generateRoute(this.seed, TUNING, this.mods, { massive: urlMassive() ? 'always' : 'random' });
         const road = route ? new Road(route.hazards, route.lengthPx) : new Road([], Infinity);
         this.sim = new RideSimulation(TUNING, road, { seed: this.seed, practice: tutorial, mods: this.mods });
         this.world = new WorldView(this, this.sim, W);
@@ -118,6 +129,7 @@ export class Play extends Phaser.Scene {
         );
         pauseBtn.setDepth(60);
         sndBtn.setDepth(60);
+        this.topButtons = [pauseBtn, sndBtn];
 
         if (tutorial) this.buildTutorial();
         if (sound.ready) sound.startEngine();
@@ -164,6 +176,7 @@ export class Play extends Phaser.Scene {
 
         for (const e of this.sim.drainEvents()) this.handleEvent(e);
         this.world.update(running ? dt : 0);
+        this.ejection?.update(dt);
         this.hud.update();
         sound.engineLoad(Math.abs(this.sim.suspension.velocityAt(0.5)) / 300);
         if (this.mode === 'tutorial') this.updateTutorial(dt);
@@ -229,6 +242,9 @@ export class Play extends Phaser.Scene {
                     if (e.spilledMl < 1) sound.sipSuccess();
                 }
                 break;
+            case 'eject':
+                this.onEject();
+                break;
             case 'end':
                 this.onEnd();
                 break;
@@ -265,13 +281,15 @@ export class Play extends Phaser.Scene {
         if (!lines || this.sim.state !== 'playing') return;
         const { sec, hazard } = this.sim.timeToNextHazard();
         if (!hazard || this.saidFor.has(hazard.id)) return;
-        if ((hazard.type === 'pothole' || hazard.type === 'waterlogged' || hazard.type === 'manhole') && sec < 1.3) {
+        const holes = ['pothole', 'massivePothole', 'waterlogged', 'manhole'];
+        if (holes.includes(hazard.type) && sec < 1.3) {
             this.saidFor.add(hazard.id);
             if (this.sim.time - this.lastLineAt > 2.2) this.driverSays(lines, true);
         }
     }
 
     private onEnd(): void {
+        if (this.sim.outcome === 'ejected') return; // handled by onEject()
         this.ended = true;
         this.hold.enabled = false;
         sound.stopEngine();
@@ -288,6 +306,7 @@ export class Play extends Phaser.Scene {
         const score = computeScore(result);
         const { best, isNewBest } = recordRide(score, result.consumedMl, won);
         // A short on-screen moment before the results card: the passenger and driver react.
+        if (result.outcome === 'ejected') return;
         this.world.auto.endPose = result.outcome;
         this.hud.hideHint();
         const auto = this.world.auto;
@@ -311,10 +330,7 @@ export class Play extends Phaser.Scene {
             this.time.delayedCall(500, () => this.popText('So thirsty…', 0xffffff, p));
         }
         this.time.delayedCall(1900, () => {
-            const launch = () => {
-                this.scene.launch('Results', { result, score, best, isNewBest, driver: this.mods.driver.id, weather: this.mods.weather.id });
-                this.scene.pause();
-            };
+            const launch = () => this.launchResults(result, score, best, isNewBest);
             // snapshot the moment for the results card (without the banner / bubble)
             t.setVisible(false);
             this.world.hideBubble();
@@ -329,6 +345,57 @@ export class Play extends Phaser.Scene {
             } catch {
                 launch();
             }
+        });
+    }
+
+    private launchResults(result: RideResult, score: number, best: Best, isNewBest: boolean): void {
+        this.scene.launch('Results', { result, score, best, isNewBest, driver: this.mods.driver.id, weather: this.mods.weather.id });
+        this.scene.pause();
+    }
+
+    /** Massive pothole hit mid-sip: PASSENGER_EJECTED. Run the launch sequence, then results. */
+    private onEject(): void {
+        if (this.ejection) return;
+        this.ended = true;
+        this.hold.release();
+        this.hold.enabled = false;
+        sound.stopEngine();
+        sound.stopRain();
+        this.hud.hideHint();
+        this.hud.root.setVisible(false);
+        for (const b of this.topButtons) b.setVisible(false);
+        const result = this.sim.result();
+        const score = computeScore(result);
+        const { best, isNewBest } = recordRide(score, result.consumedMl, false);
+        if (this.textures.exists('endshot')) this.textures.remove('endshot');
+        this.ejection = new EjectionController(this, this.world, this.sim, {
+            onPeak: (p) => {
+                // the results card's photo: the passenger at the top of the flight
+                try {
+                    const w = 560;
+                    const h = 400;
+                    const x0 = Phaser.Math.Clamp(p.x - w / 2, 0, Math.max(0, designWidth(this) - w));
+                    const y0 = Phaser.Math.Clamp(p.y - h / 2 + 40, 0, DESIGN_HEIGHT - h);
+                    this.game.renderer.snapshotArea(x0 * RS, y0 * RS, w * RS, h * RS, (img) => {
+                        if (this.textures.exists('endshot')) this.textures.remove('endshot');
+                        this.textures.addImage('endshot', img as HTMLImageElement);
+                    });
+                } catch {
+                    /* no photo this time */
+                }
+                this.time.delayedCall(60, () => {
+                    const msg = title(this, designWidth(this) / 2, 150, 'Bro unlocked flight mode.', 58, '#ffd23f')
+                        .setScrollFactor(0)
+                        .setDepth(55)
+                        .setScale(0.3)
+                        .setAngle(-3);
+                    this.tweens.add({ targets: msg, scale: 1, duration: 380, ease: 'Back.out' });
+                });
+            },
+            onDone: () => {
+                sound.failure();
+                this.launchResults(result, score, best, isNewBest);
+            },
         });
     }
 

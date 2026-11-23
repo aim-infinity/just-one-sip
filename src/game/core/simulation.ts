@@ -24,9 +24,17 @@ export type SimEvent =
     | { kind: 'go'; hazard: Hazard; severity: number }
     | { kind: 'skid'; hazard: Hazard; severity: number }
     | { kind: 'slowing'; hazard: Hazard }
+    /** Massive pothole hit mid-sip: the passenger leaves through the roof. */
+    | { kind: 'eject'; wheel: Wheel; hazard: Hazard }
     | { kind: 'end'; outcome: Outcome };
 
-export type SimState = 'playing' | 'ended';
+/**
+ * `PASSENGER_EJECTED` is terminal like `ended` (outcome = 'ejected', drinking
+ * and water flow stop), but the auto keeps rolling to a stop and bouncing so
+ * the launch animation has a living vehicle underneath it.
+ */
+export const PASSENGER_EJECTED = 'PASSENGER_EJECTED';
+export type SimState = 'playing' | typeof PASSENGER_EJECTED | 'ended';
 
 export interface SimOptions {
     seed: number;
@@ -111,7 +119,16 @@ export class RideSimulation {
         return Math.max(0, (this.lengthPx - this.distance) / this.t.pxPerMeter);
     }
 
+    /** True once the ride can no longer be played (won, lost or ejected). */
+    get isOver(): boolean {
+        return this.state !== 'playing';
+    }
+
     step(dt: number, holding: boolean): void {
+        if (this.state === PASSENGER_EJECTED) {
+            this.coast(dt);
+            return;
+        }
         if (this.state !== 'playing') return;
         const t = this.t;
         this.time += dt;
@@ -130,6 +147,7 @@ export class RideSimulation {
         buf.length = 0;
         this.collisions.advance('front', this.frontX, buf);
         this.collisions.advance('rear', this.rearX, buf);
+        let ejected = false;
         for (const ev of buf) {
             if (ev.kind === 'contact') {
                 const bd = HAZARDS[ev.hazard.type].brake;
@@ -160,11 +178,21 @@ export class RideSimulation {
                 this.sinceJolt = 0;
                 this.lastJoltSeverity = severity;
             }
+            // Massive pothole rebound with the bottle at (or nearly at) the lips → launch.
+            if (ev.hazard.type === 'massivePothole' && ev.strength > 0 && this.shouldEject()) {
+                this.eject(ev.wheel, ev.hazard);
+                ejected = true;
+                break;
+            }
             const slosh = this.bottle.spill(sloshAmount(t, this.arm.tip, this.bottle.fill, severity));
             if (slosh > 0) {
                 this.sipSpilled += slosh;
                 this.events.push({ kind: 'slosh', ml: slosh, severity });
             }
+        }
+        if (ejected) {
+            this.suspension.step(this.road.heightAt(this.rearX), this.road.heightAt(this.frontX), dt);
+            return;
         }
 
         // 3. Springs.
@@ -251,6 +279,44 @@ export class RideSimulation {
             this.sipSpilled += slosh;
             this.events.push({ kind: 'slosh', ml: slosh, severity: sev });
         }
+    }
+
+    /** Bottle raised to drinking position (or nearly) — the passenger isn't braced. */
+    private shouldEject(): boolean {
+        return !this.opts.practice && !this.bottle.isEmpty && this.arm.progress >= this.t.ejectArmThreshold;
+    }
+
+    private eject(wheel: Wheel, hazard: Hazard): void {
+        // stop the water immediately: no sipEnd pop-up, no further drinking or spilling
+        this.wasAtLips = false;
+        this.state = PASSENGER_EJECTED;
+        this.outcome = 'ejected';
+        this.sinceJolt = 0;
+        this.lastJoltSeverity = 2;
+        this.events.push({ kind: 'eject', wheel, hazard });
+    }
+
+    /**
+     * After an ejection: the driver brakes to a stop (≈1 s) while the wheels
+     * keep riding the road, so the empty auto bounces out of the crater.
+     * No drinking, no spilling, no events.
+     */
+    private coast(dt: number): void {
+        const t = this.t;
+        this.time += dt;
+        this.speed = Math.max(0, this.speed - this.cruiseSpeed * 1.1 * dt);
+        this.distance = Math.min(this.distance + this.speed * dt, this.lengthPx);
+        const buf = this.collisionBuf;
+        buf.length = 0;
+        this.collisions.advance('front', this.frontX, buf);
+        this.collisions.advance('rear', this.rearX, buf);
+        for (const ev of buf) {
+            if (ev.kind !== 'kick') continue;
+            const pace = 0.45 + 0.55 * Math.min(1, this.speed / Math.max(1, this.cruiseSpeed));
+            this.suspension.kick(ev.wheel, ev.strength * pace * t.kickBasePxPerSec * t.suspensionStrength);
+        }
+        this.suspension.step(this.road.heightAt(this.rearX), this.road.heightAt(this.frontX), dt);
+        this.rig.step(this.suspension.heightAt(t.seatFraction), dt);
     }
 
     private finish(outcome: Outcome): void {

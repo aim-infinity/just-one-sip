@@ -241,6 +241,84 @@ class SoundEngine {
         this.osc('sawtooth', 150, 112, 0.7, 0.12, 0.25);
     }
 
+    // ─── Massive pothole / passenger ejection ─────────────────────────────
+
+    /** Crater impact: deep body thud + chassis clatter. */
+    craterThud(): void {
+        this.osc('sine', 130, 32, 0.45, 0.55);
+        this.noiseBurst(160, 0.7, 0.35, 0.45, 'lowpass');
+        this.noiseBurst(1100, 3, 0.12, 0.12, 'bandpass', 0.03);
+    }
+
+    /** Suspension bottoming out and springing back. */
+    springBoing(): void {
+        this.osc('sawtooth', 160, 70, 0.16, 0.08);
+        this.osc('sine', 220, 520, 0.28, 0.1, 0.12);
+    }
+
+    /** Cartoon roof rip: crunchy crack + a woody pop. */
+    roofCrack(): void {
+        this.noiseBurst(3200, 1.2, 0.09, 0.4, 'highpass');
+        this.noiseBurst(2200, 2, 0.12, 0.3, 'bandpass', 0.04);
+        this.noiseBurst(1400, 2, 0.16, 0.25, 'bandpass', 0.09);
+        this.osc('square', 900, 110, 0.14, 0.12);
+        this.osc('sine', 240, 60, 0.2, 0.35, 0.02);
+    }
+
+    /** "Waaaaah!" — a wobbly sawtooth through a vowel-ish filter. */
+    scream(dur = 1.3): void {
+        const c = this.ctx;
+        if (!c || !this.master || settings.muted) return;
+        const t = c.currentTime;
+        const o = c.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(380, t);
+        o.frequency.exponentialRampToValueAtTime(820, t + 0.25);
+        o.frequency.exponentialRampToValueAtTime(980, t + dur);
+        const lfo = c.createOscillator();
+        lfo.frequency.value = 7;
+        const depth = c.createGain();
+        depth.gain.value = 45;
+        lfo.connect(depth).connect(o.frequency);
+        const f = c.createBiquadFilter();
+        f.type = 'bandpass';
+        f.frequency.value = 1100;
+        f.Q.value = 1.4;
+        const g = c.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.2, t + 0.05);
+        g.gain.setValueAtTime(0.2, t + dur * 0.7);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(f).connect(g).connect(this.master);
+        o.start(t);
+        lfo.start(t);
+        o.stop(t + dur + 0.05);
+        lfo.stop(t + dur + 0.05);
+    }
+
+    /** Rising slide whistle for the flight. */
+    slideWhistle(dur = 1.1): void {
+        this.osc('sine', 420, 1900, dur, 0.13);
+    }
+
+    /** Water spraying from the spinning bottle. */
+    spray(): void {
+        this.noiseBurst(3600, 1.5, 0.07, 0.05, 'highpass');
+    }
+
+    /** Comedic beat at the top of the flight. */
+    peakDing(): void {
+        this.osc('triangle', 1568, 1568, 0.18, 0.2);
+        this.osc('triangle', 2349, 2349, 0.4, 0.16, 0.09);
+    }
+
+    /** Quick whoosh + twinkle as the passenger vanishes into the sky. */
+    vanish(): void {
+        this.noiseBurst(1800, 0.8, 0.3, 0.14, 'bandpass');
+        this.osc('sine', 600, 2400, 0.25, 0.08);
+        this.osc('triangle', 2637, 2637, 0.3, 0.14, 0.28);
+    }
+
     click(): void {
         this.osc('triangle', 660, 520, 0.06, 0.15);
     }

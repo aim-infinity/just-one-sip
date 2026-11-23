@@ -9,6 +9,7 @@
  */
 export type HazardType =
     | 'pothole'
+    | 'massivePothole'
     | 'speedBreaker'
     | 'uneven'
     | 'waterlogged'
@@ -83,6 +84,25 @@ export const HAZARDS: Record<HazardType, HazardDef> = {
         kicks: [
             { u: 0.12, v: -0.55 },
             { u: 0.85, v: 1.0 },
+        ],
+    },
+    massivePothole: {
+        type: 'massivePothole',
+        // A crater, not a pothole. Rare (max one per ride, placed by
+        // MASSIVE_POTHOLE in difficulty.ts, never from section weights) and
+        // drawn with barricades so it's unmistakable. Drinking through its
+        // rebound launches the passenger through the roof (see simulation.ts).
+        widthPx: [150, 175],
+        depthPx: [30, 36],
+        impact: [1.3, 1.4],
+        minSpacingSec: 1.4,
+        difficulty: 3,
+        shape: 'dip',
+        rattlePx: 6,
+        comboable: false,
+        kicks: [
+            { u: 0.1, v: -0.7 },
+            { u: 0.88, v: 0.9 },
         ],
     },
     speedBreaker: {
