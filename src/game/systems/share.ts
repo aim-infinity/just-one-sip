@@ -93,7 +93,7 @@ export function drawResultCard(r: RideResult, autoImage?: CanvasImageSource): HT
 
     c.font = '800 26px "Baloo 2", system-ui, sans-serif';
     c.fillStyle = '#fff';
-    c.fillText('Can you finish one bottle on Bangalore roads?', 400, H - 140 + 0);
+    c.fillText('Can you finish one bottle on Indian roads?', 400, H - 140 + 0);
     return cv;
 }
 
@@ -101,8 +101,8 @@ export function shareText(r: RideResult, url: string): string {
     const won = r.outcome === 'won';
     const ml = Math.round(r.consumedMl);
     return won
-        ? `I finished my water bottle in a Bangalore auto 🛺💧 (${ml}/${r.capacityMl} ml, ${Math.round(r.spilledMl)} ml spilled). "${verdict(r)}" Can you? ${url}`
-        : `I only drank ${ml}/${r.capacityMl} ml in a bumpy Bangalore auto 🛺💦 "${verdict(r)}" Try Just One Sip: ${url}`;
+        ? `I finished my water bottle in a bumpy auto ride on Indian roads 🛺💧 (${ml}/${r.capacityMl} ml, ${Math.round(r.spilledMl)} ml spilled). "${verdict(r)}" Can you? ${url}`
+        : `I only drank ${ml}/${r.capacityMl} ml in a bumpy auto ride on Indian roads 🛺💦 "${verdict(r)}" Try Just One Sip: ${url}`;
 }
 
 export type ShareOutcome = 'shared' | 'downloaded' | 'copied' | 'failed' | 'cancelled';

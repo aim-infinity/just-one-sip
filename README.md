@@ -1,6 +1,6 @@
 # Just One Sip 🛺💧
 
-You're in the back seat of a Bangalore auto-rickshaw with a 250 ml water bottle.
+You're in the back seat of an auto-rickshaw on Indian roads with a 250 ml water bottle.
 Finish it before your stop. The potholes have other plans.
 
 **One control:** press and hold anywhere to raise the bottle and drink. Let go to lower it.

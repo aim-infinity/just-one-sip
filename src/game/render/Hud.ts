@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { RideSimulation } from '../core/simulation';
 import { FONT, PALETTE as P } from './palette';
 import { TEX_SCALE } from './textures';
+import { SAFE } from './resolution';
 
 /**
  * In-ride HUD: water drunk (with the win line), spilled, route progress and
@@ -41,7 +42,8 @@ export class Hud {
         this.drunkText = s.add.text(96, 36, '', { fontFamily: FONT, fontSize: '32px', color: P.inkCss, fontStyle: '800' });
         this.spillText = s.add.text(96, 92, '', { fontFamily: FONT, fontSize: '17px', color: '#c0392b', fontStyle: '800' });
         this.bars = s.add.graphics();
-        this.root.add([card, lbl, this.drunkText, this.spillText, this.bars]);
+        // the water card sits inside the left safe area (notch)
+        this.root.add(s.add.container(SAFE.left, SAFE.top * 0.5, [card, lbl, this.drunkText, this.spillText, this.bars]));
 
         // ── route ──
         this.routeX0 = width / 2 - 170;

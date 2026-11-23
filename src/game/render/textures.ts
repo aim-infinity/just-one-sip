@@ -122,7 +122,7 @@ function drawSkyline(c: Ctx, W: number, H: number) {
 }
 
 const SHOP_SIGNS = [
-    { t: 'DARSHINI', bg: '#c0392b', fg: '#fff3c4' },
+    { t: 'CHAI', bg: '#c0392b', fg: '#fff3c4' },
     { t: 'FILTER COFFEE', bg: '#5b3a29', fg: '#ffe2a8' },
     { t: 'MOBILES', bg: '#1d6fb8', fg: '#ffffff' },
     { t: 'BAKERY', bg: '#e67e22', fg: '#fffbe9' },

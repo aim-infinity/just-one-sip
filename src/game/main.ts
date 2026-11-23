@@ -5,7 +5,7 @@ import { Play } from './scenes/Play';
 import { Results } from './scenes/Results';
 import { Setup } from './scenes/Setup';
 import { DESIGN_HEIGHT } from './render/palette';
-import { RS, patchTextResolution } from './render/resolution';
+import { RS, measureSafeArea, patchTextResolution } from './render/resolution';
 
 /**
  * Design height is fixed at 720. Width adapts to the device's landscape aspect
@@ -15,11 +15,13 @@ export function computeDesignWidth(): number {
     const w = Math.max(window.innerWidth, window.innerHeight);
     const h = Math.min(window.innerWidth, window.innerHeight);
     const aspect = w / Math.max(1, h);
-    return Math.round(Math.min(1560, Math.max(1280, DESIGN_HEIGHT * aspect)));
+    // follow the phone's real aspect (up to ~2.5:1) so the game fills the screen edge to edge
+    return Math.round(Math.min(1800, Math.max(1280, DESIGN_HEIGHT * aspect)));
 }
 
 export default function StartGame(parent: string): Phaser.Game {
     patchTextResolution();
+    measureSafeArea();
     return new Phaser.Game({
         type: Phaser.AUTO,
         parent,

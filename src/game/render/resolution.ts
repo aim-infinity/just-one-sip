@@ -16,6 +16,31 @@ function computeRenderScale(): number {
     return Math.min(2, Math.max(1, rs));
 }
 
+/**
+ * Notch / home-indicator insets in *design* pixels. The canvas is full-bleed
+ * (edge to edge); only HUD and buttons are pushed inside these insets.
+ */
+export const SAFE = { left: 0, right: 0, top: 0, bottom: 0 };
+
+export function measureSafeArea(): void {
+    try {
+        const d = document.createElement('div');
+        d.style.cssText =
+            'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;' +
+            'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+        document.body.appendChild(d);
+        const cs = getComputedStyle(d);
+        const k = DESIGN_HEIGHT / Math.max(1, Math.min(window.innerWidth, window.innerHeight));
+        SAFE.left = (parseFloat(cs.paddingLeft) || 0) * k;
+        SAFE.right = (parseFloat(cs.paddingRight) || 0) * k;
+        SAFE.top = (parseFloat(cs.paddingTop) || 0) * k;
+        SAFE.bottom = (parseFloat(cs.paddingBottom) || 0) * k;
+        d.remove();
+    } catch {
+        /* no env() support */
+    }
+}
+
 /** Render scale: canvas pixels per design pixel (1 … 2). */
 export const RS = computeRenderScale();
 

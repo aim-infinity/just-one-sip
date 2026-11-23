@@ -3,7 +3,10 @@ import type { RideSimulation } from '../core/simulation';
 import { AUTO_TEX, TEX_SCALE } from './textures';
 import { GROUND_Y, PALETTE as P } from './palette';
 
-export type Mood = 'calm' | 'drinking' | 'nervous' | 'shock' | 'happy' | 'soaked';
+export type Mood = 'calm' | 'drinking' | 'nervous' | 'shock' | 'happy' | 'soaked' | 'cheer' | 'sob' | 'thirsty';
+
+/** How the ride ended — drives the celebration / disappointment animation. */
+export type EndPose = 'won' | 'spilledOut' | 'arrivedThirsty';
 
 type V = { x: number; y: number };
 
@@ -129,7 +132,15 @@ export class AutoView {
         return { x: c.x + r.x, y: c.y + r.y };
     }
 
+    /** Set when the ride ends; the passenger and driver react. */
+    endPose: EndPose | null = null;
+    private endT = 0;
+
     update(sim: RideSimulation, camX: number, pose: AutoPose, _dt = 0): void {
+        if (this.endPose) {
+            this.endT += _dt;
+            pose = { ...pose, mood: this.endPose === 'won' ? 'cheer' : this.endPose === 'spilledOut' ? 'sob' : 'thirsty', blink: false };
+        }
         const t = sim.t;
         const R = t.wheelRadiusPx;
         const ms = pose.motionScale;
@@ -158,6 +169,9 @@ export class AutoView {
         const rig = sim.rig;
         this.driverHead.y = -152 - rig.torsoOffset * 0.8;
         this.driverHead.rotation = Math.sin(sim.time * 1.7) * 0.03 - rig.headOffset * 0.004;
+        // happy head-wobble when you finish; a sympathetic droop when you don't
+        if (this.endPose === 'won') this.driverHead.rotation = Math.sin(this.endT * 14) * 0.16;
+        else if (this.endPose) this.driverHead.rotation = 0.12;
 
         this.drawPassenger(sim, pose);
         this.drawArmAndBottle(sim);
@@ -172,6 +186,8 @@ export class AutoView {
         // braking throws the torso/head forward (horizontal springs)
         const sh: V = { x: SHOULDER.x + rig.torsoX.pos, y: SHOULDER.y + tDy };
         const head: V = { x: HEAD.x + rig.headX.pos, y: HEAD.y + hDy };
+        if (this.endPose === 'won') head.y -= Math.abs(Math.sin(this.endT * 9)) * 4;
+        if (this.endPose === 'spilledOut') head.y += 3 + Math.sin(this.endT * 10) * 1;
 
         // legs (thigh visible above the body panel)
         g.lineStyle(17, P.ink, 1);
@@ -230,7 +246,17 @@ export class AutoView {
         const ey = y - 2;
         // eyes
         g.lineStyle(2.2, P.ink, 1);
-        if (mood === 'drinking' || mood === 'happy' || (pose.blink && mood === 'calm')) {
+        if (mood === 'cheer') {
+            g.lineStyle(2.6, P.ink, 1);
+            g.beginPath();
+            g.arc(ex, ey + 2.5, 4, Math.PI * 1.1, Math.PI * 1.9);
+            g.strokePath();
+        } else if (mood === 'sob' || mood === 'thirsty') {
+            g.lineStyle(2.4, P.ink, 1);
+            g.beginPath();
+            g.arc(ex, ey - 2, 3.8, Math.PI * 0.2, Math.PI * 0.8);
+            g.strokePath();
+        } else if (mood === 'drinking' || mood === 'happy' || (pose.blink && mood === 'calm')) {
             g.beginPath();
             if (mood === 'happy') g.arc(ex, ey + 2, 3.5, Math.PI * 1.1, Math.PI * 1.9);
             else g.arc(ex, ey - 1, 3.5, Math.PI * 0.15, Math.PI * 0.85);
@@ -256,14 +282,34 @@ export class AutoView {
         g.lineStyle(2.5, P.hair, 1);
         if (mood === 'nervous') g.lineBetween(ex - 5, ey - 9, ex + 5, ey - 12);
         else if (mood === 'shock') g.lineBetween(ex - 5, ey - 13, ex + 5, ey - 13);
-        else if (mood === 'soaked') g.lineBetween(ex - 5, ey - 11, ex + 5, ey - 8);
+        else if (mood === 'soaked' || mood === 'sob' || mood === 'thirsty') g.lineBetween(ex - 5, ey - 9, ex + 5, ey - 13);
+        else if (mood === 'cheer') g.lineBetween(ex - 5, ey - 12, ex + 5, ey - 13);
         else g.lineBetween(ex - 5, ey - 10, ex + 5, ey - 10);
 
         // mouth
         const mx = x + 12;
         const my = y + 8;
         g.lineStyle(2.2, P.ink, 1);
-        if (mood === 'drinking') {
+        if (mood === 'cheer') {
+            // big open grin
+            g.fillStyle(0x6b1f1f, 1);
+            g.slice(mx - 1, my - 2, 6.5, 0, Math.PI, false);
+            g.fillPath();
+            g.fillStyle(0xff7f7f, 1);
+            g.fillCircle(mx - 1, my + 2.5, 2.2);
+            g.fillStyle(0xff8a80, 0.6);
+            g.fillCircle(x + 4, y + 5, 4);
+        } else if (mood === 'sob') {
+            // wobbly crying mouth
+            g.fillStyle(0x6b1f1f, 1);
+            g.fillEllipse(mx - 1, my + 3, 7, 5 + Math.abs(Math.sin(this.endT * 12)) * 2);
+        } else if (mood === 'thirsty') {
+            // mouth open, tongue hanging out
+            g.fillStyle(0x6b1f1f, 1);
+            g.fillEllipse(mx, my + 1, 6, 6);
+            g.fillStyle(0xff7f7f, 1);
+            g.fillEllipse(mx + 2, my + 5 + Math.sin(this.endT * 6), 4, 6);
+        } else if (mood === 'drinking') {
             g.fillStyle(P.skin, 1);
             g.fillCircle(x + 8, y + 7, 5.5); // puffed cheek
             g.lineStyle(1.5, P.skinShade, 1);
@@ -299,6 +345,19 @@ export class AutoView {
             g.fillCircle(x - 6, y - 14, 3);
             g.fillTriangle(x - 9, y - 15, x - 3, y - 15, x - 6, y - 21);
         }
+        if (mood === 'sob') {
+            // tears streaming
+            g.fillStyle(P.water, 0.95);
+            for (let i = 0; i < 4; i++) {
+                const k = (this.endT * 1.6 + i * 0.25) % 1;
+                g.fillCircle(ex - 2 + k * 4, ey + 4 + k * 22, 2.2 - k);
+            }
+        }
+        if (mood === 'thirsty') {
+            g.fillStyle(P.water, 1);
+            g.fillCircle(x - 6, y - 14, 3);
+            g.fillTriangle(x - 9, y - 15, x - 3, y - 15, x - 6, y - 21);
+        }
         if (mood === 'soaked' || sim.bottle.spilledMl > 40) {
             g.fillStyle(P.water, 0.9);
             const t = sim.time * 3;
@@ -324,7 +383,28 @@ export class AutoView {
             x: u * u * HAND_DOWN.x + 2 * u * p * HAND_CTRL.x + p * p * HAND_UP.x + rig.handX.pos,
             y: u * u * HAND_DOWN.y + 2 * u * p * HAND_CTRL.y + p * p * HAND_UP.y + aDy,
         };
-        const angle = DRINK_ANGLE * ease(Math.min(1, sim.arm.progress * 1.15));
+        let angle = DRINK_ANGLE * ease(Math.min(1, sim.arm.progress * 1.15));
+        if (this.endPose) {
+            const k = ease(Math.min(1, this.endT / 0.4));
+            const lerp = (a: number, b: number) => a + (b - a) * k;
+            let target: V;
+            let ang: number;
+            if (this.endPose === 'won') {
+                // shake the empty bottle upside down in triumph
+                target = { x: -50 + Math.sin(this.endT * 18) * 3, y: -150 };
+                ang = Math.PI - 0.1 + Math.sin(this.endT * 18) * 0.28;
+            } else if (this.endPose === 'spilledOut') {
+                target = { x: HAND_DOWN.x - 4, y: HAND_DOWN.y + 6 };
+                ang = 0.7;
+            } else {
+                // holding the bottle up, staring at what's left
+                target = { x: -58, y: -128 };
+                ang = -0.35 + Math.sin(this.endT * 3) * 0.05;
+            }
+            hand.x = lerp(hand.x, target.x);
+            hand.y = lerp(hand.y, target.y);
+            angle = lerp(angle, ang);
+        }
         this.bottleAngle = angle;
         this.tipLocal = add(hand, rot(BOTTLE_TIP, angle));
 
@@ -374,6 +454,55 @@ export class AutoView {
                 // missing the mouth: water runs down the chin
                 g.lineStyle(3, P.water, 0.9);
                 g.lineBetween(tip.x, tip.y, tip.x - 3, tip.y + 16);
+            }
+        }
+        if (this.endPose) this.drawEndFx(g);
+    }
+
+    /** Sparkles for a win; a little personal rain cloud when it all went wrong. */
+    private drawEndFx(g: Phaser.GameObjects.Graphics): void {
+        const t = this.endT;
+        const head = { x: HEAD.x, y: HEAD.y };
+        if (this.endPose === 'won') {
+            // last drop falling out of the upside-down bottle
+            const k = (t * 1.5) % 1;
+            g.fillStyle(P.water, 1 - k);
+            g.fillCircle(this.tipLocal.x, this.tipLocal.y + k * 30, 2.5);
+            // twinkling sparkles around the head
+            for (let i = 0; i < 5; i++) {
+                const a = t * 2 + (i / 5) * Math.PI * 2;
+                const r = 30 + Math.sin(t * 5 + i) * 4;
+                const sx = head.x + Math.cos(a) * r;
+                const sy = head.y - 6 + Math.sin(a) * r * 0.6;
+                const sz = 3 + Math.abs(Math.sin(t * 6 + i)) * 3;
+                g.fillStyle(i % 2 ? 0xffd23f : 0xffffff, 1);
+                g.fillTriangle(sx - sz, sy, sx + sz, sy, sx, sy - sz * 1.8);
+                g.fillTriangle(sx - sz, sy, sx + sz, sy, sx, sy + sz * 1.8);
+            }
+        } else if (this.endPose === 'spilledOut') {
+            // a tiny grey cloud raining on the passenger
+            const cx = head.x + 2;
+            const cy = head.y - 44 + Math.sin(t * 2) * 2;
+            g.fillStyle(0x8a94a0, 1);
+            for (const [dx, dy, r] of [[-12, 2, 9], [0, -4, 11], [12, 2, 9], [0, 5, 9]]) g.fillCircle(cx + dx, cy + dy, r);
+            g.lineStyle(2, P.water, 0.9);
+            for (let i = 0; i < 5; i++) {
+                const k = (t * 2.5 + i * 0.2) % 1;
+                const x = cx - 14 + i * 7;
+                g.lineBetween(x, cy + 12 + k * 22, x - 1.5, cy + 18 + k * 22);
+            }
+        } else {
+            // "thirsty" — a wavy heat line above the head
+            g.lineStyle(2, 0xffb020, 0.8);
+            for (let j = 0; j < 3; j++) {
+                g.beginPath();
+                for (let i = 0; i <= 8; i++) {
+                    const x = head.x - 14 + j * 14 + Math.sin(t * 6 + i + j) * 2;
+                    const y = head.y - 26 - i * 2.5;
+                    if (i === 0) g.moveTo(x, y);
+                    else g.lineTo(x, y);
+                }
+                g.strokePath();
             }
         }
     }

@@ -36,7 +36,24 @@ export class Results extends Phaser.Scene {
         const root = this.add.container(0, 0);
         root.add(panel(this, cx, H / 2 + 14, 860, 640, won ? 0xfff3c4 : P.cream));
 
-        const head = title(this, cx, 104, `${won ? '🎉' : '😩'}  ${headline(r)}`, 54, won ? '#ffd23f' : '#ffffff');
+        // a "photo" of how the ride ended, pinned to the corner of the card
+        const hasShot = this.textures.exists('endshot');
+        if (hasShot) {
+            const ph = this.add.container(cx - 340, 132).setAngle(-6);
+            const frame = this.add.graphics();
+            frame.fillStyle(P.ink, 0.3);
+            frame.fillRect(-104, -74, 216, 166);
+            frame.fillStyle(0xffffff, 1);
+            frame.fillRect(-110, -80, 216, 166);
+            frame.lineStyle(3, P.ink, 1);
+            frame.strokeRect(-110, -80, 216, 166);
+            const img = this.add.image(-2, -10, 'endshot');
+            img.setScale(196 / img.width);
+            const tape = this.add.rectangle(-2, -84, 70, 18, 0xffe9a8, 0.9).setAngle(4);
+            ph.add([frame, img, tape]);
+            root.add(ph);
+        }
+        const head = title(this, hasShot ? cx + 70 : cx, 104, hasShot ? headline(r) : `${won ? '🎉' : '😩'}  ${headline(r)}`, 54, won ? '#ffd23f' : '#ffffff');
         root.add(head);
 
         const s = stars(r);
@@ -56,7 +73,7 @@ export class Results extends Phaser.Scene {
             starText.x = cx - 170;
             root.add(label(this, cx + 110, 160, `${d.emoji} ${d.name} · ${w.emoji} ${w.label}`, 22, '#6b5b4b'));
         }
-        root.add(label(this, cx, 210, `“${verdict(r)}”`, 30, P.inkCss, 'italic 800').setWordWrapWidth(780));
+        root.add(label(this, hasShot ? cx + 70 : cx, 210, `“${verdict(r)}”`, 28, P.inkCss, 'italic 800').setWordWrapWidth(hasShot ? 620 : 780));
 
         // stat cards
         const stats: [string, string, string][] = [

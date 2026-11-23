@@ -77,7 +77,8 @@ export class WorldView {
         this.fx.floorY = GROUND_Y + 20;
         this.weather = new WeatherView(scene, width, wx, settings.reducedMotion);
         this.scene = scene;
-        if (Number.isFinite(sim.lengthPx)) this.road.setFinish(sim.lengthPx + sim.t.wheelbasePx + 30);
+        // destination sign stands just ahead of where the auto stops, so you can see it
+        if (Number.isFinite(sim.lengthPx)) this.road.setFinish(sim.lengthPx + sim.t.wheelbasePx + 170);
         this.lastCamX = this.camX;
     }
 
@@ -101,6 +102,11 @@ export class WorldView {
         this.bubble = s.add.container(0, 0, [g, t]).setDepth(46).setScale(0.6);
         s.tweens.add({ targets: this.bubble, scale: 1, duration: 200, ease: 'Back.out' });
         this.bubbleT = ms / 1000;
+    }
+
+    hideBubble(): void {
+        this.bubble?.destroy();
+        this.bubble = undefined;
     }
 
     get camX(): number {

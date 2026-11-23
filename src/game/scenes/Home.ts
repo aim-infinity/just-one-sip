@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { designWidth, setupCamera } from '../render/resolution';
+import { SAFE, designWidth, setupCamera } from '../render/resolution';
 import { HAZARDS } from '../config/hazards';
 import { TUNING } from '../config/tuning';
 import { Road } from '../core/road';
@@ -55,7 +55,7 @@ export class Home extends Phaser.Scene {
         const card = this.add.graphics().setDepth(39);
         card.fillStyle(P.ink, 0.55);
         card.fillRoundedRect(cx - 300, 192, 600, 118, 24);
-        label(this, cx, 251, 'Finish your 250 ml water bottle before the auto\nreaches your stop. Bangalore roads have other plans.', 24, '#ffffff', '600')
+        label(this, cx, 251, 'Finish your 250 ml water bottle before the auto\nreaches your stop. Indian roads have other plans.', 24, '#ffffff', '600')
             .setDepth(40)
             .setLineSpacing(2);
 
@@ -83,7 +83,7 @@ export class Home extends Phaser.Scene {
 
         const snd = makeIconButton(
             this,
-            W - 56,
+            W - 56 - SAFE.right,
             54,
             (g) => drawSpeaker(g, settings.muted),
             () => {

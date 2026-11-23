@@ -1,12 +1,28 @@
-import StartGame from './game/main';
+import StartGame, { computeDesignWidth } from './game/main';
+import { DESIGN_HEIGHT } from './game/render/palette';
+import { RS, measureSafeArea } from './game/render/resolution';
 import { mountDebugPanel } from './game/debug/DebugPanel';
 import { sound } from './game/systems/sound';
 
 function boot() {
     const game = StartGame('game-container');
 
-    // Re-fit on rotation / browser chrome changes (iOS reports late sizes).
-    const refit = () => setTimeout(() => game.scale.refresh(), 250);
+    // Re-fit on rotation / browser chrome changes (iOS reports late sizes). If the
+    // screen shape changed, resize the game so it stays edge to edge, and rebuild
+    // menu scenes (a ride in progress keeps its layout until it ends).
+    let timer = 0;
+    const refit = () => {
+        clearTimeout(timer);
+        timer = window.setTimeout(() => {
+            measureSafeArea();
+            const w = computeDesignWidth() * RS;
+            if (Math.abs(w - game.scale.width) > 8 && window.innerWidth > window.innerHeight) {
+                game.scale.setGameSize(w, DESIGN_HEIGHT * RS);
+                for (const key of ['Home', 'Setup']) if (game.scene.isActive(key)) game.scene.getScene(key).scene.restart();
+            }
+            game.scale.refresh();
+        }, 250);
+    };
     window.addEventListener('orientationchange', refit);
     window.addEventListener('resize', refit);
 

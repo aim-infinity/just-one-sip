@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { DRIVERS, DRIVER_IDS, type DriverId } from '../config/drivers';
 import { WEATHER, WEATHER_IDS, type WeatherId } from '../config/weather';
 import { FONT, PALETTE as P } from '../render/palette';
-import { designWidth, setupCamera } from '../render/resolution';
+import { SAFE, designWidth, setupCamera } from '../render/resolution';
 import { TEX_SCALE } from '../render/textures';
 import { label, makeButton, title } from '../render/ui';
 import { saveSettings, settings } from '../systems/settings';
@@ -41,7 +41,7 @@ export class Setup extends Phaser.Scene {
         g.fillRect(0, 0, W, 720);
 
         title(this, W / 2, 60, 'CHOOSE YOUR RIDE', 54);
-        makeButton(this, 110, 60, '‹ Home', () => this.scene.start('Home'), { width: 160, height: 54, fontSize: 24, fill: P.cream });
+        makeButton(this, 110 + SAFE.left, 60, '‹ Home', () => this.scene.start('Home'), { width: 160, height: 54, fontSize: 24, fill: P.cream });
 
         // ── drivers ──
         label(this, W / 2, 122, 'Your driver', 26, P.inkCss);

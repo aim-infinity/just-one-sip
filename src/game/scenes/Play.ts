@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { designWidth, setupCamera } from '../render/resolution';
+import { RS, SAFE, designWidth, setupCamera } from '../render/resolution';
 import { DESIGN_HEIGHT } from '../render/palette';
 import { HAZARDS } from '../config/hazards';
 import { TUNING, speedPx } from '../config/tuning';
@@ -104,10 +104,10 @@ export class Play extends Phaser.Scene {
         };
 
         // top-right controls
-        const pauseBtn = makeIconButton(this, W - 56, 54, drawPauseIcon, () => this.setPaused(true));
+        const pauseBtn = makeIconButton(this, W - 56 - SAFE.right, 54, drawPauseIcon, () => this.setPaused(true));
         const sndBtn = makeIconButton(
             this,
-            W - 136,
+            W - 136 - SAFE.right,
             54,
             (g) => drawSpeaker(g, settings.muted),
             () => {
@@ -187,7 +187,7 @@ export class Play extends Phaser.Scene {
                     this.time.delayedCall(250, () => this.popText('MOO!', 0xffffff, { x: cowX, y: 520 }));
                 } else if (e.hazard.type === 'cutIn') {
                     sound.horn();
-                    this.driverSays(lines ?? ['Aiyyo!'], true);
+                    this.driverSays(lines ?? ['Whoa!'], true);
                 } else {
                     this.driverSays(this.mods.driver.id === 'impatient' && lines ? [lines[lines.length - 1]] : ['Red light!'], true);
                 }
@@ -287,9 +287,48 @@ export class Play extends Phaser.Scene {
         }
         const score = computeScore(result);
         const { best, isNewBest } = recordRide(score, result.consumedMl, won);
-        this.time.delayedCall(won ? 700 : 900, () => {
-            this.scene.launch('Results', { result, score, best, isNewBest, driver: this.mods.driver.id, weather: this.mods.weather.id });
-            this.scene.pause();
+        // A short on-screen moment before the results card: the passenger and driver react.
+        this.world.auto.endPose = result.outcome;
+        this.hud.hideHint();
+        const auto = this.world.auto;
+        const banner = { won: 'BOTTLE FINISHED!', spilledOut: 'TOO MANY SPLASHES!', arrivedThirsty: 'WE HAVE ARRIVED!' }[result.outcome];
+        const t = title(this, designWidth(this) / 2 + 120, 196, banner, 60, won ? '#ffd23f' : '#ffffff').setDepth(55).setScale(0.3);
+        this.tweens.add({ targets: t, scale: 1, duration: 420, ease: 'Back.out' });
+        if (won) {
+            this.world.say(['Super, saar! 👍', 'Full bottle finished!', 'Wah! Well done!'][Math.floor(Math.random() * 3)]);
+            const colors = [0xffd23f, 0xff6b6b, 0x4fb3f5, 0x2fbf71, 0xffffff];
+            for (let i = 0; i < 6; i++) {
+                this.time.delayedCall(i * 160, () => {
+                    const p = auto.toScreen({ x: -60 + Math.random() * 80, y: -190 });
+                    this.world.fx.burst(p.x, p.y, 14, { up: 420, spread: 360, color: colors[i % colors.length] });
+                });
+            }
+        } else if (result.outcome === 'spilledOut') {
+            this.world.say('Oh no, saar… next time!');
+        } else {
+            this.world.say("We've reached, saar!");
+            const p = auto.toScreen({ x: -90, y: -205 });
+            this.time.delayedCall(500, () => this.popText('So thirsty…', 0xffffff, p));
+        }
+        this.time.delayedCall(1900, () => {
+            const launch = () => {
+                this.scene.launch('Results', { result, score, best, isNewBest, driver: this.mods.driver.id, weather: this.mods.weather.id });
+                this.scene.pause();
+            };
+            // snapshot the moment for the results card (without the banner / bubble)
+            t.setVisible(false);
+            this.world.hideBubble();
+            try {
+                const x0 = Math.max(0, auto.container.x - 280) * RS;
+                const y0 = 200 * RS;
+                this.game.renderer.snapshotArea(x0, y0, 560 * RS, 400 * RS, (img) => {
+                    if (this.textures.exists('endshot')) this.textures.remove('endshot');
+                    this.textures.addImage('endshot', img as HTMLImageElement);
+                    launch();
+                });
+            } catch {
+                launch();
+            }
         });
     }
 
@@ -356,7 +395,7 @@ export class Play extends Phaser.Scene {
         this.tutText = text;
         this.tutPanel = this.add.container(W / 2 + 60, 190, [bg, text]).setDepth(55);
         this.tutPanel.setData('bg', bg);
-        const skip = makeButton(this, W - 250, 54, 'Skip  ›', () => this.finishTutorial(), {
+        const skip = makeButton(this, W - 250 - SAFE.right, 54, 'Skip  ›', () => this.finishTutorial(), {
             width: 150,
             height: 54,
             fontSize: 24,

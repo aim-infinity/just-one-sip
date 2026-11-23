@@ -256,12 +256,27 @@ export function drawAutoFront(c: Ctx): void {
     c.quadraticCurveTo(70, -22, 80, -36);
     c.stroke();
 
-    // lettering
-    c.fillStyle = '#fff2b8';
-    c.font = '800 14px "Baloo 2", "Trebuchet MS", sans-serif';
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText('NAMMA AUTO', -20, -46);
+    // painted decoration: a simple flower vine (no lettering)
+    c.strokeStyle = '#fff2b8';
+    c.lineWidth = 2.5;
+    c.beginPath();
+    c.moveTo(-90, -44);
+    c.bezierCurveTo(-60, -56, -40, -32, -10, -44);
+    c.bezierCurveTo(10, -52, 25, -38, 40, -44);
+    c.stroke();
+    for (const [x, y] of [[-90, -44], [-40, -40], [10, -48], [40, -44]]) {
+        for (let i = 0; i < 5; i++) {
+            const a = (i / 5) * Math.PI * 2;
+            c.fillStyle = i % 2 ? '#ffd23f' : '#ff8c5a';
+            c.beginPath();
+            c.arc(x + Math.cos(a) * 4, y + Math.sin(a) * 4, 3, 0, Math.PI * 2);
+            c.fill();
+        }
+        c.fillStyle = '#e74c3c';
+        c.beginPath();
+        c.arc(x, y, 2.2, 0, Math.PI * 2);
+        c.fill();
+    }
 
     // rear details: tail lamp, white bumper tab, luggage rack, canopy straps
     c.fillStyle = '#e74c3c';

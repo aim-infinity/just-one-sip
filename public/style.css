@@ -26,8 +26,7 @@ body {
 #app {
     position: absolute;
     inset: 0;
-    /* keep the game clear of notches / home indicators */
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    /* full-bleed: the game itself keeps its HUD clear of notches (see render/resolution.ts) */
     box-sizing: border-box;
     background: radial-gradient(ellipse at center, #ffd89a 0%, #e8a35c 100%);
 }

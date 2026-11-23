@@ -63,14 +63,14 @@ export const DRIVERS: Record<DriverId, DriverProfile> = {
         extraWeights: { cutIn: 2.5 },
         lines: {
             start: ['Fast-fast, I have next ride saar!', 'Hold tight, shortcut route.'],
-            braking: ['Aiyyo! Where are you going?!', 'Saar, these bikers!', 'Dei! Indicator illa?!', 'Come on, come on…'],
+            braking: ['Whoa! Where are you going?!', 'Saar, these bikers!', 'No indicator?!', 'Come on, come on…'],
         },
     },
     overconfident: {
         id: 'overconfident',
         name: 'Manju',
         trait: 'Overconfident',
-        blurb: 'Fastest driver in Bangalore (he says). Never slows down.',
+        blurb: 'Fastest driver in the city (he says). Never slows down.',
         emoji: '😎',
         speedMul: 1.1,
         caution: null,

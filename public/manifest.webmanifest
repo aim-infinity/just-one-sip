@@ -1,7 +1,7 @@
 {
     "name": "Just One Sip",
     "short_name": "One Sip",
-    "description": "Finish one water bottle in a bumpy Bangalore auto-rickshaw.",
+    "description": "Finish one water bottle in a bumpy auto-rickshaw ride on Indian roads.",
     "start_url": "./",
     "display": "fullscreen",
     "orientation": "landscape",
