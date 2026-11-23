@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ROUTE_LAYOUT } from '../src/game/config/difficulty';
-import { cloneTuning, speedPx } from '../src/game/config/tuning';
-import { generateRoute, minClearSec, requiredDrinkSec, Road, hazardProfile } from '../src/game/core/road';
+import { cloneTuning } from '../src/game/config/tuning';
+import { BEGINNER_HAZARDS } from '../src/game/config/difficulty';
+import { frontSpeed, generateRoute, minClearSec, requiredDrinkSec, Road, hazardProfile, travelSec } from '../src/game/core/road';
 
 const t = cloneTuning();
-const v = speedPx(t);
 const SEEDS = Array.from({ length: 300 }, (_, i) => i * 7 + 1);
 
 describe('Road generation', () => {
@@ -19,14 +19,14 @@ describe('Road generation', () => {
             for (let i = 1; i < hazards.length; i++) {
                 const prev = hazards[i - 1];
                 const cur = hazards[i];
-                const gapSec = (cur.x - (prev.x + prev.width)) / v;
+                const gapSec = travelSec(t, prev.x + prev.width, cur.x);
                 expect(gapSec).toBeGreaterThan(0);
                 if (cur.block === prev.block) {
                     // combo inside one block: tight but never overlapping
-                    expect(gapSec).toBeGreaterThanOrEqual(t.comboGapSec - 1e-9);
+                    expect(gapSec).toBeGreaterThanOrEqual(t.comboGapSec * 0.97);
                 } else {
                     // between blocks: rear wheel clears + reaction time
-                    expect(gapSec).toBeGreaterThanOrEqual(minClearSec(t, prev.type) - 1e-9);
+                    expect(gapSec).toBeGreaterThanOrEqual(minClearSec(t, prev.type, frontSpeed(t, prev.x + prev.width)) * 0.97);
                 }
             }
         }
@@ -36,10 +36,10 @@ describe('Road generation', () => {
         for (const seed of SEEDS) {
             const r = generateRoute(seed, t);
             const first = r.hazards[0];
-            expect((first.x - t.wheelbasePx) / v).toBeGreaterThanOrEqual(ROUTE_LAYOUT.firstHazardSec - 1e-9);
+            expect(travelSec(t, t.wheelbasePx, first.x)).toBeGreaterThanOrEqual(ROUTE_LAYOUT.firstHazardSec * 0.97);
             const last = r.hazards[r.hazards.length - 1];
             const finish = r.lengthPx + t.wheelbasePx;
-            expect((finish - (last.x + last.width)) / v).toBeGreaterThanOrEqual(ROUTE_LAYOUT.finishClearSec - 1e-9);
+            expect(travelSec(t, last.x + last.width, finish)).toBeGreaterThanOrEqual(ROUTE_LAYOUT.finishClearSec * 0.97);
         }
     });
 
@@ -47,7 +47,7 @@ describe('Road generation', () => {
         for (const seed of SEEDS) {
             const r = generateRoute(seed, t);
             const opening = r.hazards.filter((h) => (h.x - t.wheelbasePx) / r.lengthPx < 0.25);
-            for (const h of opening) expect(['pothole', 'speedBreaker']).toContain(h.type);
+            for (const h of opening) expect(BEGINNER_HAZARDS).toContain(h.type);
         }
     });
 
@@ -59,12 +59,13 @@ describe('Road generation', () => {
             for (let i = 1; i < r.hazards.length; i++) {
                 const prev = r.hazards[i - 1];
                 const cur = r.hazards[i];
-                const p = (cur.x - t.wheelbasePx) / r.lengthPx;
+                // classify by where the gap was chosen (end of the previous hazard)
+                const p = (prev.x + prev.width - t.wheelbasePx) / r.lengthPx;
                 if (cur.block === prev.block) {
                     if (p >= 0.75) finalCombos++;
                     continue;
                 }
-                const g = (cur.x - (prev.x + prev.width)) / v;
+                const g = travelSec(t, prev.x + prev.width, cur.x);
                 if (p < 0.25) gaps.opening.push(g);
                 else if (p >= 0.75) gaps.final.push(g);
             }

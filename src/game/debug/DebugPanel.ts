@@ -5,7 +5,7 @@ import { DEFAULT_TUNING, TUNING, type TuningKey } from '../config/tuning';
  * production with `?debug` in the URL. Mutates the live TUNING object.
  */
 const SLIDERS: { key: TuningKey; label: string; min: number; max: number; step: number; note?: string }[] = [
-    { key: 'speedMps', label: 'Scroll speed (m/s)', min: 3, max: 14, step: 0.5 },
+    { key: 'speedScale', label: 'Scroll speed × (curve 6→9 m/s)', min: 0.4, max: 2, step: 0.05 },
     { key: 'drinkRateMlPerSec', label: 'Drink rate (ml/s)', min: 5, max: 60, step: 1 },
     { key: 'capacityMl', label: 'Bottle capacity (ml)', min: 50, max: 1000, step: 10, note: 'restart' },
     { key: 'winMinConsumedMl', label: 'Win: min drunk (ml)', min: 0, max: 1000, step: 5, note: 'restart' },

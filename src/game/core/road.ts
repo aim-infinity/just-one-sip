@@ -1,6 +1,6 @@
 import { HAZARDS, type HazardType, type KickPoint } from '../config/hazards';
 import { ROUTE_LAYOUT, SECTIONS, sectionAt, type SectionConfig } from '../config/difficulty';
-import { routePx, speedPx, wheelbaseSec, type Tuning } from '../config/tuning';
+import { progressAtFront, routePx, speedPxAt, type Tuning } from '../config/tuning';
 import { Rng } from './rng';
 
 export interface Hazard {
@@ -24,6 +24,7 @@ export function hazardProfile(h: Hazard, x: number): number {
     const u = (x - h.x) / h.width;
     if (u <= 0 || u >= 1) return 0;
     const shape = HAZARDS[h.type].shape;
+    if (shape === 'flat') return 0;
     if (shape === 'dip') {
         // steep walls, flat-ish bottom
         const s = Math.sin(Math.PI * u);
@@ -85,12 +86,15 @@ export interface RouteLayout {
     attempts: number;
 }
 
-function makeHazard(rng: Rng, type: HazardType, x: number, block: number): Omit<Hazard, 'id'> {
+function makeHazard(rng: Rng, type: HazardType, x: number, block: number, t: Tuning): Omit<Hazard, 'id'> {
     const d = HAZARDS[type];
+    let width = Math.round(rng.range(d.widthPx[0], d.widthPx[1]));
+    // A signal's stop line sits exactly where the front wheel will come to rest.
+    if (d.brake && d.brake.slowTo === 0) width = Math.round((frontSpeed(t, x) * d.brake.decelSec) / 2);
     return {
         type,
         x,
-        width: Math.round(rng.range(d.widthPx[0], d.widthPx[1])),
+        width,
         depth: rng.range(d.depthPx[0], d.depthPx[1]),
         impact: rng.range(d.impact[0], d.impact[1]),
         kicks: d.kicks,
@@ -98,33 +102,48 @@ function makeHazard(rng: Rng, type: HazardType, x: number, block: number): Omit<
     };
 }
 
-/** Minimum clear-road seconds after a block whose last hazard is `type`. */
-export function minClearSec(t: Tuning, type: HazardType): number {
-    return wheelbaseSec(t) + Math.max(t.reactionTimeSec, HAZARDS[type].minSpacingSec);
+/** Auto speed (px/s) when its front wheel is at world x. */
+export function frontSpeed(t: Tuning, x: number): number {
+    return speedPxAt(t, progressAtFront(t, x));
+}
+
+/** Seconds for the front wheel to travel from world x1 to x2 (follows the speed curve, ignores braking). */
+export function travelSec(t: Tuning, x1: number, x2: number): number {
+    if (x2 <= x1) return 0;
+    const n = Math.max(1, Math.ceil((x2 - x1) / 60));
+    const dx = (x2 - x1) / n;
+    let sec = 0;
+    for (let i = 0; i < n; i++) sec += dx / frontSpeed(t, x1 + (i + 0.5) * dx);
+    return sec;
+}
+
+/** Minimum clear-road seconds after a block whose last hazard is `type`, at speed v (px/s). */
+export function minClearSec(t: Tuning, type: HazardType, v: number): number {
+    return t.wheelbasePx / v + Math.max(t.reactionTimeSec, HAZARDS[type].minSpacingSec);
 }
 
 function layoutOnce(seed: number, t: Tuning, relax: number): Omit<RouteLayout, 'attempts' | 'drinkWindowSec'> {
     const rng = new Rng(seed);
-    const v = speedPx(t);
     const length = routePx(t);
     // Hazards are placed in world space; the front wheel starts at wheelbasePx.
-    const end = length + t.wheelbasePx - ROUTE_LAYOUT.finishClearSec * v;
+    const finish = length + t.wheelbasePx;
+    const end = finish - ROUTE_LAYOUT.finishClearSec * frontSpeed(t, finish);
     const hazards: Omit<Hazard, 'id'>[] = [];
-    let x = t.wheelbasePx + ROUTE_LAYOUT.firstHazardSec * v;
+    let x = t.wheelbasePx + ROUTE_LAYOUT.firstHazardSec * frontSpeed(t, t.wheelbasePx);
     let block = 0;
 
     while (x < end) {
-        const section: SectionConfig = sectionAt((x - t.wheelbasePx) / length);
+        const section: SectionConfig = sectionAt(progressAtFront(t, x));
         const type = rng.weighted(section.weights);
-        const first = makeHazard(rng, type, x, block);
+        const first = makeHazard(rng, type, x, block, t);
         if (first.x + first.width > end) break;
         hazards.push(first);
         let last = first;
 
-        if (section.comboChance > 0 && rng.chance(section.comboChance)) {
-            const comboType = rng.pick<HazardType>(['pothole', 'uneven', 'speedBreaker']);
-            const cx = last.x + last.width + t.comboGapSec * v;
-            const second = makeHazard(rng, comboType, cx, block);
+        if (HAZARDS[type].comboable && section.comboChance > 0 && rng.chance(section.comboChance)) {
+            const comboType = rng.pick(COMBO_TYPES);
+            const cx = last.x + last.width + t.comboGapSec * frontSpeed(t, last.x);
+            const second = makeHazard(rng, comboType, cx, block, t);
             if (second.x + second.width < end) {
                 hazards.push(second);
                 last = second;
@@ -132,40 +151,40 @@ function layoutOnce(seed: number, t: Tuning, relax: number): Omit<RouteLayout, '
         }
 
         block++;
+        const v = frontSpeed(t, last.x + last.width);
         const wantSafe = section.safeEvery > 0 && block % section.safeEvery === 0;
         let gap = wantSafe ? section.safeGapSec : rng.range(section.gapSec[0], section.gapSec[1]);
-        gap = Math.max(gap * t.obstacleSpacingScale * relax, minClearSec(t, last.type));
+        gap = Math.max(gap * t.obstacleSpacingScale * relax, minClearSec(t, last.type, v));
         x = last.x + last.width + gap * v;
     }
     return { seed, lengthPx: length, hazards };
 }
 
+const COMBO_TYPES = (Object.keys(HAZARDS) as HazardType[]).filter((k) => HAZARDS[k].comboable);
+
 /**
  * Estimate how many seconds of genuinely safe drinking a layout offers:
  * time between blocks, minus wheelbase traversal, settling and arm raise.
+ * Conservative: ignores the extra (sippable) time spent stopped at signals.
  */
 export function drinkWindowSec(hazards: Omit<Hazard, 'id'>[], t: Tuning, lengthPx = routePx(t)): number {
-    const v = speedPx(t);
     const raise = t.raiseMs / 1000;
     const margin = 0.1;
-    // Group into blocks
     const blocks: { start: number; end: number }[] = [];
     for (const h of hazards) {
         const b = blocks[blocks.length - 1];
-        if (b && h.x - b.end < t.comboGapSec * v * 1.5) b.end = Math.max(b.end, h.x + h.width);
+        if (b && h.x - b.end < t.comboGapSec * frontSpeed(t, h.x) * 1.5) b.end = Math.max(b.end, h.x + h.width);
         else blocks.push({ start: h.x, end: h.x + h.width });
     }
     let total = 0;
-    // Before first block: from start (front wheel at wheelbase) to first block.
-    let freeFrom = t.wheelbasePx; // front wheel world x where road is clear
+    let freeFrom = t.wheelbasePx; // front wheel world x from which the road is clear
     for (const b of blocks) {
-        const sec = (b.start - freeFrom) / v - raise - margin;
-        total += Math.max(0, sec);
+        total += Math.max(0, travelSec(t, freeFrom, b.start) - raise - margin);
         // rear wheel must clear the block, then settle
-        freeFrom = b.end + t.wheelbasePx + t.settleSec * v;
+        freeFrom = b.end + t.wheelbasePx + t.settleSec * frontSpeed(t, b.end);
     }
     const finish = lengthPx + t.wheelbasePx;
-    total += Math.max(0, (finish - freeFrom) / v - raise);
+    total += Math.max(0, travelSec(t, freeFrom, finish) - raise);
     return total;
 }
 

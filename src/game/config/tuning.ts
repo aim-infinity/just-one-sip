@@ -19,10 +19,10 @@ export const TUNING = {
     // ── World & route ───────────────────────────────────────────────────
     /** World pixels per metre (used only for the distance read-out). */
     pxPerMeter: 60,
-    /** Auto speed in metres per second (7 m/s ≈ 25 km/h — believable city pace). */
-    speedMps: 7,
-    /** Route length in metres. 280 m at 7 m/s ≈ 40 s ride. */
-    routeMeters: 280,
+    /** Multiplies the whole speed curve (see SPEED_PROFILE below). 1 = default. */
+    speedScale: 1,
+    /** Route length in metres. ≈40 s ride along SPEED_PROFILE. */
+    routeMeters: 290,
 
     // ── Auto geometry ───────────────────────────────────────────────────
     /** Distance between rear and front axles (px). The auto art is scaled to match (art is drawn at 190). */
@@ -35,8 +35,9 @@ export const TUNING = {
 
     // ── Bottle & drinking ───────────────────────────────────────────────
     capacityMl: 250,
-    /** You must have drunk at least this much when the bottle empties to win. */
-    winMinConsumedMl: 195,
+    /** You must have drunk at least this much when the bottle empties to win.
+     *  capacity − this = the spill limit (50 ml): spill more and the ride ends. */
+    winMinConsumedMl: 200,
     /** Flow rate into the mouth while the bottle is correctly at the lips. */
     drinkRateMlPerSec: 11,
 
@@ -74,6 +75,22 @@ export const TUNING = {
     /** Front-wheel hits are felt less in the rear seat. */
     frontWheelFeel: 0.55,
 
+    // ── Braking (cows, signals) — throws the passenger forward ─────────
+    /** Horizontal velocity (px/s) of a severity-1 braking jolt. */
+    brakeKickPxPerSec: 150,
+    /** Head is thrown forward the most, the braced hand the least. */
+    brakeHeadKick: 1.0,
+    brakeTorsoKick: 0.55,
+    brakeHandKick: 0.3,
+    /** Nose-dive of the auto body per unit braking severity (px/s). */
+    brakeDivePxPerSec: 120,
+    headXStiffness: 120,
+    headXDamping: 8,
+    torsoXStiffness: 220,
+    torsoXDamping: 14,
+    handXStiffness: 300,
+    handXDamping: 20,
+
     // ── Spilling ────────────────────────────────────────────────────────
     /** Vertical head-vs-bottle misalignment (px) tolerated while drinking. */
     alignTolerancePx: 6,
@@ -82,7 +99,7 @@ export const TUNING = {
     /** Global multiplier on all spill amounts. */
     spillSensitivity: 1,
     /** ml lost from a severity-1 jolt with the bottle fully tipped. */
-    sloshMlPerImpact: 20,
+    sloshMlPerImpact: 24,
     /** Upright bottles only slosh on jolts stronger than this severity... */
     uprightSloshThreshold: 1.3,
     /** ...and only when fuller than this fraction. */
@@ -109,7 +126,34 @@ export function cloneTuning(overrides: Partial<Tuning> = {}): Tuning {
     return { ...DEFAULT_TUNING, ...overrides };
 }
 
-/** Derived helpers. */
-export const speedPx = (t: Tuning) => t.speedMps * t.pxPerMeter;
+/**
+ * Speed curve over the route: [progress 0..1, metres/second].
+ * Capped at 9 m/s (≈32 km/h) — difficulty comes from timing, not runaway speed.
+ */
+export const SPEED_PROFILE: [number, number][] = [
+    [0, 6],
+    [0.3, 6.6],
+    [0.7, 8],
+    [1, 9],
+];
+
+/** Speed (px/s) at a given route progress (0..1). */
+export function speedPxAt(t: Tuning, progress: number): number {
+    const p = Math.min(1, Math.max(0, progress));
+    let mps = SPEED_PROFILE[SPEED_PROFILE.length - 1][1];
+    for (let i = 1; i < SPEED_PROFILE.length; i++) {
+        const [p1, v1] = SPEED_PROFILE[i];
+        if (p <= p1) {
+            const [p0, v0] = SPEED_PROFILE[i - 1];
+            mps = v0 + ((v1 - v0) * (p - p0)) / (p1 - p0 || 1);
+            break;
+        }
+    }
+    return mps * t.speedScale * t.pxPerMeter;
+}
+
+/** Starting speed (px/s) — also the constant speed of practice/tutorial rides. */
+export const speedPx = (t: Tuning) => speedPxAt(t, 0);
 export const routePx = (t: Tuning) => t.routeMeters * t.pxPerMeter;
-export const wheelbaseSec = (t: Tuning) => t.wheelbasePx / speedPx(t);
+/** Route progress (0..1) when the *front* wheel is at world x. */
+export const progressAtFront = (t: Tuning, x: number) => (x - t.wheelbasePx) / routePx(t);

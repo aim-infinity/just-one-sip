@@ -12,6 +12,10 @@ export class PassengerRig {
     readonly torso: Spring;
     readonly head: Spring;
     readonly hand: Spring;
+    /** Horizontal (forward = +) offsets — braking throws the head forward. */
+    readonly torsoX: Spring;
+    readonly headX: Spring;
+    readonly handX: Spring;
     private seat = 0;
     /** Fast decaying head vibration (rough road). */
     private jitterAmp = 0;
@@ -21,6 +25,16 @@ export class PassengerRig {
         this.torso = new Spring(t.torsoStiffness, t.torsoDamping);
         this.head = new Spring(t.headStiffness, t.headDamping);
         this.hand = new Spring(t.handStiffness, t.handDamping);
+        this.torsoX = new Spring(t.torsoXStiffness, t.torsoXDamping);
+        this.headX = new Spring(t.headXStiffness, t.headXDamping);
+        this.handX = new Spring(t.handXStiffness, t.handXDamping);
+    }
+
+    /** Forward (+) / backward (−) jolt from braking or pulling away. */
+    kickX(dv: number): void {
+        this.torsoX.kick(dv * this.t.brakeTorsoKick);
+        this.headX.kick(dv * this.t.brakeHeadKick);
+        this.handX.kick(dv * this.t.brakeHandKick);
     }
 
     reset(seat: number): void {
@@ -28,6 +42,9 @@ export class PassengerRig {
         this.torso.reset(seat);
         this.head.reset(seat);
         this.hand.reset(seat);
+        this.torsoX.reset();
+        this.headX.reset();
+        this.handX.reset();
     }
 
     /** The seat has been kicked with dv; each body part receives its share. */
@@ -56,6 +73,15 @@ export class PassengerRig {
         this.torso.step(seat, dt);
         this.head.step(seat, dt);
         this.hand.step(seat, dt);
+        this.torsoX.stiffness = this.t.torsoXStiffness;
+        this.torsoX.damping = this.t.torsoXDamping;
+        this.headX.stiffness = this.t.headXStiffness;
+        this.headX.damping = this.t.headXDamping;
+        this.handX.stiffness = this.t.handXStiffness;
+        this.handX.damping = this.t.handXDamping;
+        this.torsoX.step(0, dt);
+        this.headX.step(0, dt);
+        this.handX.step(0, dt);
     }
 
     get torsoOffset(): number {
@@ -70,8 +96,16 @@ export class PassengerRig {
     get handOffset(): number {
         return this.hand.pos - this.seat;
     }
-    /** Mouth-to-bottle vertical misalignment (px, signed: + = head above bottle). */
-    get misalign(): number {
+    /** Vertical mouth-to-bottle gap (px, + = head above bottle). */
+    get misalignY(): number {
         return this.head.pos + this.jitter - this.hand.pos;
+    }
+    /** Horizontal mouth-to-bottle gap (px, + = head ahead of bottle). */
+    get misalignX(): number {
+        return this.headX.pos - this.handX.pos;
+    }
+    /** Total mouth-to-bottle distance (px). */
+    get misalign(): number {
+        return Math.hypot(this.misalignY, this.misalignX);
     }
 }

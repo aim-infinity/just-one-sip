@@ -25,8 +25,8 @@ export class Rng {
         return items[Math.floor(this.next() * items.length) % items.length];
     }
 
-    weighted<K extends string>(weights: Record<K, number>): K {
-        const entries = (Object.entries(weights) as [K, number][]).filter(([, w]) => w > 0);
+    weighted<K extends string>(weights: Partial<Record<K, number>>): K {
+        const entries = (Object.entries(weights) as [K, number | undefined][]).filter((e): e is [K, number] => (e[1] ?? 0) > 0);
         const total = entries.reduce((a, [, w]) => a + w, 0);
         let r = this.next() * total;
         for (const [k, w] of entries) {

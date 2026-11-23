@@ -1,5 +1,6 @@
 import { HAZARDS } from '../config/hazards';
-import { routePx, speedPx, type Tuning } from '../config/tuning';
+import { routePx, speedPxAt, type Tuning } from '../config/tuning';
+import { BrakeController } from './brake';
 import { Arm, type ArmState } from './arm';
 import { Bottle } from './bottle';
 import { CollisionTracker, type CollisionEvent, type Wheel } from './collisions';
@@ -18,6 +19,8 @@ export type SimEvent =
     | { kind: 'sipStart' }
     | { kind: 'sipEnd'; drunkMl: number; spilledMl: number }
     | { kind: 'armState'; state: ArmState }
+    | { kind: 'brake'; hazard: Hazard; severity: number }
+    | { kind: 'go'; hazard: Hazard; severity: number }
     | { kind: 'end'; outcome: Outcome };
 
 export type SimState = 'playing' | 'ended';
@@ -38,6 +41,9 @@ export class RideSimulation {
     readonly suspension: Suspension;
     readonly rig: PassengerRig;
     readonly collisions: CollisionTracker;
+    readonly brake = new BrakeController();
+    /** Current forward speed (px/s), including braking. */
+    speed = 0;
 
     /** Distance travelled = world x of the rear wheel (px). */
     distance = 0;
@@ -87,6 +93,14 @@ export class RideSimulation {
     get distanceM(): number {
         return this.distance / this.t.pxPerMeter;
     }
+    /** Max ml you can spill and still win. */
+    get spillLimitMl(): number {
+        return this.t.capacityMl - this.t.winMinConsumedMl;
+    }
+    /** Cruising speed (px/s) at the current point of the route, ignoring brakes. */
+    get cruiseSpeed(): number {
+        return speedPxAt(this.t, this.progress);
+    }
     get remainingM(): number {
         return Math.max(0, (this.lengthPx - this.distance) / this.t.pxPerMeter);
     }
@@ -97,8 +111,10 @@ export class RideSimulation {
         this.time += dt;
         this.sinceJolt += dt;
 
-        // 1. Move the auto forward (world scrolls; the auto's world x advances).
-        this.distance = Math.min(this.distance + speedPx(t) * dt, this.lengthPx);
+        // 1. Move the auto forward along the (capped) speed curve, minus any braking.
+        if (this.brake.step(dt) === 'go') this.jolt(-HAZARDS[this.brake.hazard!.type].brake!.lurch * this.brake.hazard!.impact, 'go');
+        this.speed = this.cruiseSpeed * this.brake.factor;
+        this.distance = Math.min(this.distance + this.speed * dt, this.lengthPx);
 
         // 2. World-space wheel/hazard collisions → suspension impulses.
         const buf = this.collisionBuf;
@@ -107,6 +123,16 @@ export class RideSimulation {
         this.collisions.advance('rear', this.rearX, buf);
         for (const ev of buf) {
             if (ev.kind === 'contact') {
+                const bd = HAZARDS[ev.hazard.type].brake;
+                if (bd) {
+                    // Only the front wheel matters: the driver brakes for what's ahead.
+                    if (ev.wheel === 'front' && !this.brake.active) {
+                        this.brake.start(ev.hazard, bd);
+                        this.events.push(ev);
+                        this.jolt(bd.jolt * ev.hazard.impact, 'brake');
+                    }
+                    continue;
+                }
                 this.events.push(ev);
                 continue;
             }
@@ -160,15 +186,42 @@ export class RideSimulation {
         }
         this.wasAtLips = atLips;
 
-        // 5. Win / lose.
+        // 5. Win / lose. The ride ends the moment the win target becomes unreachable.
         if (this.opts.practice) {
             if (this.bottle.isEmpty) this.bottle.refill();
             return;
         }
+        const canStillWin = this.bottle.consumedMl + this.bottle.remainingMl >= t.winMinConsumedMl - 1e-6;
         if (this.bottle.isEmpty) {
             this.finish(this.bottle.consumedMl >= t.winMinConsumedMl - 1e-6 ? 'won' : 'spilledOut');
+        } else if (!canStillWin) {
+            this.finish('spilledOut');
         } else if (this.distance >= this.lengthPx) {
             this.finish('arrivedThirsty');
+        }
+    }
+
+    /**
+     * Longitudinal jolt: + = braking (passenger thrown forward, nose dives),
+     * − = pulling away (thrown back). Severity ≈ 1 for an emergency stop.
+     */
+    private jolt(severity: number, kind: 'brake' | 'go'): void {
+        const t = this.t;
+        const s = severity * t.suspensionStrength;
+        this.rig.kickX(s * t.brakeKickPxPerSec);
+        this.suspension.kick('front', -s * t.brakeDivePxPerSec);
+        this.suspension.kick('rear', s * t.brakeDivePxPerSec * 0.5);
+        const sev = Math.abs(s);
+        if (sev > 0.15) {
+            this.sinceJolt = 0;
+            this.lastJoltSeverity = sev;
+        }
+        const hazard = this.brake.hazard!;
+        this.events.push({ kind, hazard, severity: sev });
+        const slosh = this.bottle.spill(sloshAmount(t, this.arm.tip, this.bottle.fill, sev));
+        if (slosh > 0) {
+            this.sipSpilled += slosh;
+            this.events.push({ kind: 'slosh', ml: slosh, severity: sev });
         }
     }
 
@@ -186,7 +239,7 @@ export class RideSimulation {
     timeToNextHazard(): { sec: number; hazard?: Hazard } {
         const h = this.road.nextHazardFrom(this.frontX);
         if (!h) return { sec: Infinity };
-        return { sec: (h.x - this.frontX) / speedPx(this.t), hazard: h };
+        return { sec: (h.x - this.frontX) / Math.max(1, this.cruiseSpeed), hazard: h };
     }
 
     result(): RideResult {

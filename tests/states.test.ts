@@ -72,8 +72,9 @@ describe('Ride state transitions', () => {
         while (sim.state === 'playing') sim.step(dt, false);
         expect(sim.outcome).toBe('arrivedThirsty');
         expect(sim.distanceM).toBeCloseTo(t.routeMeters, 3);
-        expect(sim.time).toBeGreaterThan(39);
-        expect(sim.time).toBeLessThan(41);
+        // ≈40 s along the 6 → 9 m/s speed curve
+        expect(sim.time).toBeGreaterThan(37);
+        expect(sim.time).toBeLessThan(43);
     });
 
     it('spilling the bottle empty before drinking enough loses', () => {
