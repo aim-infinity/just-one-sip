@@ -189,6 +189,24 @@ class SoundEngine {
         [392, 370, 349, 311].forEach((f, i) => this.osc('sawtooth', f, f * 0.97, i === 3 ? 0.7 : 0.25, 0.12, i * 0.28));
     }
 
+    /** Tyre squeal + chassis thunk for sudden braking. */
+    brake(severity: number): void {
+        const s = Math.min(1.5, severity);
+        this.osc('sawtooth', 1900, 1500, 0.32, 0.05 + s * 0.05);
+        this.noiseBurst(2600, 6, 0.3, 0.08 + s * 0.08);
+        this.osc('sine', 90, 45, 0.18, 0.2 + s * 0.15, 0.05);
+    }
+
+    /** Metallic manhole-cover clank. */
+    clank(): void {
+        this.osc('triangle', 920, 860, 0.12, 0.18);
+        this.osc('square', 1380, 1300, 0.08, 0.06, 0.01);
+    }
+
+    moo(): void {
+        this.osc('sawtooth', 150, 112, 0.7, 0.12, 0.25);
+    }
+
     click(): void {
         this.osc('triangle', 660, 520, 0.06, 0.15);
     }

@@ -6,8 +6,24 @@ Finish it before your stop. The potholes have other plans.
 **One control:** press and hold anywhere to raise the bottle and drink. Let go to lower it.
 Sip on smooth road, lower before bumps.
 
-- **Win:** empty the bottle having drunk at least 195 ml.
-- **Lose:** reach your stop with water left, or slosh the bottle empty before you've drunk enough.
+- **Win:** finish the bottle before your stop. Spills never stop you winning.
+- **Spills still count:** they're tracked, cost score, and decide your stars
+  (3 stars under 10 ml spilled, 2 under 35 ml).
+- **Lose:** reach your stop with water left (or spill every last drop).
+
+The auto speeds up from 6 to a capped 9 m/s over the ~40 s ride. Road blockers:
+
+| Blocker | What it does |
+| --- | --- |
+| Pothole | Front wheel dips and rebounds, then the rear follows |
+| Speed breaker | Slow rolling rise, then a jolt as the auto comes down |
+| Waterlogged pothole | Looks the same every time, but its hidden depth varies from shallow to brutal |
+| Repair patch | Small vibrations: you can usually keep sipping |
+| Manhole | Small, sharp clank |
+| Rumble strip | Fast rattle: sippable at a small cost |
+| Metro-work gravel | Long, loose and rattly |
+| Cow crossing | Sudden brake: the passenger is thrown forward |
+| Traffic signal | Full stop (free sip!), amber warning, then a lurch on green |
 
 Built with Phaser 3, TypeScript and Vite. No backend, no accounts, no network calls
 during play (the only external request is the Google Font, and the game falls back
@@ -55,7 +71,9 @@ npx wrangler pages deploy dist --project-name=just-one-sip --branch=main
 
 ### Automatic deploy on every push to `main`
 
-`.github/workflows/deploy.yml` runs tests and builds on every push and PR. On pushes to `main`
+The workflow is parked at `ci/github-deploy.yml` until the GitHub token has `workflow` scope
+(`gh auth refresh -s workflow`, then `git mv ci/github-deploy.yml .github/workflows/deploy.yml`).
+It runs tests and builds on every push and PR. On pushes to `main`
 it deploys to Cloudflare Pages once these two repository secrets exist:
 
 1. Cloudflare dashboard → My Profile → API Tokens → **Create Token** → template
@@ -155,8 +173,9 @@ the whole way usually loses.
 
 | What                                   | Where                                              |
 | -------------------------------------- | -------------------------------------------------- |
-| Speed, route length (≈40 s ride)        | `tuning.ts` → `speedMps`, `routeMeters`            |
-| Drink rate, capacity, win threshold     | `tuning.ts` → `drinkRateMlPerSec`, `capacityMl`, `winMinConsumedMl` |
+| Speed curve, route length (≈40 s ride)  | `tuning.ts` → `SPEED_PROFILE`, `speedScale`, `routeMeters` |
+| Braking jolts (cows, signals)           | `tuning.ts` → `brake*`, `hazards.ts` → `brake`     |
+| Drink rate, capacity                    | `tuning.ts` → `drinkRateMlPerSec`, `capacityMl`    |
 | Arm timings                             | `tuning.ts` → `raiseMs`, `lowerMs`                 |
 | Bounce / pitch                          | `tuning.ts` → `suspension*`, `kickBasePxPerSec`    |
 | How much bumps break alignment          | `tuning.ts` → `head*`, `hand*`, `alignTolerancePx` |
@@ -169,12 +188,14 @@ After changing balance, run `npm run balance` to see scripted-player win rates a
 ## Replacing the placeholder art
 
 All art is drawn procedurally at boot in `src/game/render/textures.ts`, keyed by name:
-`sky, sun, cloud, skyline, midrow, props, road, wheel, autoBack, autoFront, driverHead, autoIcon`.
+`sky, sun, cloud, skyline, midrow, props, road, wheel, autoBack, autoFront, driverHead, zebu, autoIcon`.
+The auto, wheel and cow art lives in `src/game/render/autoArt.ts`; hazard art in `src/game/render/hazardArt.ts`.
+Textures are drawn at the device's render scale (`render/resolution.ts`) and displayed with `TEX_SCALE`.
 
 To use illustrated sprites:
 
 1. Put PNGs in `public/assets/` at the same pixel sizes (see each `canvasTex(...)` call).
-   The auto textures are 360×230 with the **axle midpoint at (180, 200)**, drawn for a
+   The auto textures are 400×236 with the **axle midpoint at (200, 204)**, drawn for a
    190 px wheelbase. The game scales them to `TUNING.wheelbasePx`.
 2. In `scenes/Boot.ts`, add a `preload()` with `this.load.image('autoFront', 'assets/autoFront.png')` etc.
    `makeTextures` skips any key that already exists.

@@ -91,12 +91,14 @@ function makeHazard(rng: Rng, type: HazardType, x: number, block: number, t: Tun
     let width = Math.round(rng.range(d.widthPx[0], d.widthPx[1]));
     // A signal's stop line sits exactly where the front wheel will come to rest.
     if (d.brake && d.brake.slowTo === 0) width = Math.round((frontSpeed(t, x) * d.brake.decelSec) / 2);
+    // depth and impact are correlated, so a deeper hole really does hit harder
+    const k = rng.next();
     return {
         type,
         x,
         width,
-        depth: rng.range(d.depthPx[0], d.depthPx[1]),
-        impact: rng.range(d.impact[0], d.impact[1]),
+        depth: d.depthPx[0] + (d.depthPx[1] - d.depthPx[0]) * k,
+        impact: d.impact[0] + (d.impact[1] - d.impact[0]) * (0.75 * k + 0.25 * rng.next()),
         kicks: d.kicks,
         block,
     };

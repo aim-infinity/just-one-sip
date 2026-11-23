@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { TUNING } from '../config/tuning';
+import { designWidth, setupCamera } from '../render/resolution';
+import { DESIGN_HEIGHT } from '../render/palette';
 import { headline, verdict, stars, type RideResult } from '../core/scoring';
 import { FONT, PALETTE as P } from '../render/palette';
 import { label, makeButton, panel, title } from '../render/ui';
@@ -20,9 +21,10 @@ export class Results extends Phaser.Scene {
     }
 
     create(data: ResultsData): void {
+        setupCamera(this);
         const { result: r, score, best, isNewBest } = data;
-        const W = this.scale.width;
-        const H = this.scale.height;
+        const W = designWidth(this);
+        const H = DESIGN_HEIGHT;
         const cx = W / 2;
         const won = r.outcome === 'won';
 
@@ -64,7 +66,7 @@ export class Results extends Phaser.Scene {
             root.add(label(this, x, 318, v, 42, col));
         });
 
-        const need = won ? '' : r.outcome === 'spilledOut' ? `   ·   You needed ${TUNING.winMinConsumedMl} ml in you` : `   ·   ${Math.round(r.remainingMl)} ml still in the bottle`;
+        const need = won ? '' : r.outcome === 'spilledOut' ? '   ·   Every drop went on the floor' : `   ·   ${Math.round(r.remainingMl)} ml still in the bottle`;
         root.add(label(this, cx, 386, `Score ${score.toLocaleString()}${need}`, 28));
         const bestLine = isNewBest ? '🏆 NEW PERSONAL BEST!' : `Personal best: ${best.score.toLocaleString()}`;
         const bestText = label(this, cx, 422, bestLine, 24, isNewBest ? '#e67e22' : '#6b5b4b');
@@ -117,7 +119,7 @@ export class Results extends Phaser.Scene {
                       ? ''
                       : 'Sharing not available here';
         if (!msg) return;
-        const t = label(this, this.scale.width / 2, this.scale.height - 30, msg, 24, '#ffffff').setDepth(10);
+        const t = label(this, designWidth(this) / 2, DESIGN_HEIGHT - 30, msg, 24, '#ffffff').setDepth(10);
         t.setStroke(P.inkCss, 6);
         this.tweens.add({ targets: t, alpha: 0, delay: 1800, duration: 500, onComplete: () => t.destroy() });
     }

@@ -94,10 +94,10 @@ export const HAZARDS: Record<HazardType, HazardDef> = {
         shape: 'hump',
         rattlePx: 0,
         comboable: true,
-        // gradual, predictable rise and fall
+        // a longer rolling rise, then a jolt as the auto comes down
         kicks: [
-            { u: 0.25, v: 0.8 },
-            { u: 0.75, v: -0.4 },
+            { u: 0.3, v: 0.5 },
+            { u: 0.8, v: -0.95 },
         ],
     },
     uneven: {
@@ -108,16 +108,18 @@ export const HAZARDS: Record<HazardType, HazardDef> = {
         minSpacingSec: 0.7,
         difficulty: 2,
         shape: 'ripple',
-        rattlePx: 28,
+        rattlePx: 12,
         comboable: true,
-        // a rattle of small jolts that add up
-        kicks: even(4, 0.6),
+        // repair patch: small vibrations you can usually keep drinking through
+        kicks: even(4, 0.45),
     },
     waterlogged: {
         type: 'waterlogged',
         widthPx: [115, 150],
-        depthPx: [18, 23],
-        impact: [1.25, 1.45],
+        // uncertain depth: every puddle looks the same, some are shallow,
+        // some are much deeper (impact scales with the hidden depth)
+        depthPx: [8, 24],
+        impact: [0.6, 1.5],
         minSpacingSec: 1.0,
         difficulty: 3,
         shape: 'dip',

@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { speedPx } from '../config/tuning';
 import type { RideSimulation, SimEvent } from '../core/simulation';
 import { settings } from '../systems/settings';
 import { AutoView, type Mood } from './AutoView';
@@ -82,7 +81,8 @@ export class WorldView {
         const a = this.auto;
         if (e.kind === 'slosh') {
             const tip = a.toScreen(a.tipLocal);
-            this.fx.burst(tip.x, tip.y, Math.min(30, 6 + Math.round(e.ml * 1.6)), { up: 200 + e.severity * 160, spread: 260 });
+            const forward = this.sim.brake.active ? 1.6 : 0;
+            this.fx.burst(tip.x, tip.y, Math.min(30, 6 + Math.round(e.ml * 1.6)), { up: 200 + e.severity * 160, spread: 260, dir: forward });
         } else if (e.kind === 'miss') {
             if (Math.random() < Math.min(1, e.ml * 6)) {
                 const m = a.toScreen(a.mouthLocal);
@@ -99,14 +99,14 @@ export class WorldView {
         const scroll = camX - this.lastCamX;
         this.lastCamX = camX;
         this.parallax.update(camX, dt, this.width);
-        this.road.update(camX);
+        this.road.update(camX, this.sim, this.sim.time);
         const { mood, blink } = this.mood.update(dt, this.sim);
         this.auto.update(this.sim, camX, {
             x: this.autoX,
             mood,
             blink,
             motionScale: settings.reducedMotion ? 0.45 : 1,
-        });
-        this.fx.update(dt, Math.min(scroll, speedPx(this.sim.t) * 0.05));
+        }, dt);
+        this.fx.update(dt, Math.min(scroll, this.sim.cruiseSpeed * 0.05));
     }
 }

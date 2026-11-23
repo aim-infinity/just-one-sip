@@ -93,10 +93,6 @@ export class RideSimulation {
     get distanceM(): number {
         return this.distance / this.t.pxPerMeter;
     }
-    /** Max ml you can spill and still win. */
-    get spillLimitMl(): number {
-        return this.t.capacityMl - this.t.winMinConsumedMl;
-    }
     /** Cruising speed (px/s) at the current point of the route, ignoring brakes. */
     get cruiseSpeed(): number {
         return speedPxAt(this.t, this.progress);
@@ -186,16 +182,13 @@ export class RideSimulation {
         }
         this.wasAtLips = atLips;
 
-        // 5. Win / lose. The ride ends the moment the win target becomes unreachable.
+        // 5. Win / lose. Finishing the bottle wins, however much was spilled.
         if (this.opts.practice) {
             if (this.bottle.isEmpty) this.bottle.refill();
             return;
         }
-        const canStillWin = this.bottle.consumedMl + this.bottle.remainingMl >= t.winMinConsumedMl - 1e-6;
         if (this.bottle.isEmpty) {
-            this.finish(this.bottle.consumedMl >= t.winMinConsumedMl - 1e-6 ? 'won' : 'spilledOut');
-        } else if (!canStillWin) {
-            this.finish('spilledOut');
+            this.finish(this.bottle.consumedMl >= 1 ? 'won' : 'spilledOut');
         } else if (this.distance >= this.lengthPx) {
             this.finish('arrivedThirsty');
         }

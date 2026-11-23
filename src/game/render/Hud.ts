@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { RideSimulation } from '../core/simulation';
 import { FONT, PALETTE as P } from './palette';
+import { TEX_SCALE } from './textures';
 
 /**
  * In-ride HUD: water drunk (with the win line), spilled, route progress and
@@ -63,7 +64,7 @@ export class Hud {
             }
         route.lineStyle(2, P.ink, 1);
         route.strokeRect(this.routeX1 + 5, 12, 24, 18);
-        this.routeAuto = s.add.image(this.routeX0, 30, 'autoIcon').setScale(0.13).setOrigin(0.5, 0.85);
+        this.routeAuto = s.add.image(this.routeX0, 30, 'autoIcon').setScale(0.13 * TEX_SCALE).setOrigin(0.5, 0.85);
         if (showRoute) this.root.add([route, this.distText, this.routeAuto]);
         else {
             route.destroy();
@@ -107,7 +108,7 @@ export class Hud {
 
         if (drunk !== this.last.drunk || spill !== this.last.spill) {
             this.drunkText.setText(`${drunk} / ${t.capacityMl} ml`);
-            this.spillText.setText(spill > 0 ? `💦 ${spill} ml spilled` : 'Nothing spilled yet');
+            this.spillText.setText(spill > 0 ? `💦 ${spill} ml spilled · keep sipping!` : 'Nothing spilled yet');
             this.spillText.setColor(spill > 0 ? '#c0392b' : '#3f8f5a');
         }
         if (dist !== this.last.dist && this.distText.active) this.distText.setText(`${dist} m to go`);
@@ -137,7 +138,7 @@ export class Hud {
         g.fillRoundedRect(x0, y, w, 12, 6);
         const frac = Math.min(1, b.consumedMl / t.capacityMl);
         if (frac > 0) {
-            g.fillStyle(b.consumedMl >= t.winMinConsumedMl ? P.green : P.water, 1);
+            g.fillStyle(P.water, 1);
             g.fillRoundedRect(x0, y, Math.max(12, w * frac), 12, 6);
         }
         const sfrac = Math.min(1 - frac, b.spilledMl / t.capacityMl);
@@ -145,10 +146,6 @@ export class Hud {
             g.fillStyle(P.red, 0.8);
             g.fillRect(x0 + w - w * sfrac, y, w * sfrac, 12);
         }
-        // win line — you must have drunk this much when the bottle empties
-        const wx = x0 + w * (t.winMinConsumedMl / t.capacityMl);
-        g.fillStyle(P.ink, 1);
-        g.fillRect(wx - 1.5, y - 5, 3, 22);
 
         if (this.routeAuto.active) {
             this.routeAuto.x = this.routeX0 + (this.routeX1 - this.routeX0) * sim.progress;

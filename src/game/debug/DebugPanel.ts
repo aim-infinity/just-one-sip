@@ -8,7 +8,6 @@ const SLIDERS: { key: TuningKey; label: string; min: number; max: number; step: 
     { key: 'speedScale', label: 'Scroll speed × (curve 6→9 m/s)', min: 0.4, max: 2, step: 0.05 },
     { key: 'drinkRateMlPerSec', label: 'Drink rate (ml/s)', min: 5, max: 60, step: 1 },
     { key: 'capacityMl', label: 'Bottle capacity (ml)', min: 50, max: 1000, step: 10, note: 'restart' },
-    { key: 'winMinConsumedMl', label: 'Win: min drunk (ml)', min: 0, max: 1000, step: 5, note: 'restart' },
     { key: 'raiseMs', label: 'Arm raise (ms)', min: 100, max: 1200, step: 10 },
     { key: 'lowerMs', label: 'Arm lower (ms)', min: 80, max: 1000, step: 10 },
     { key: 'obstacleSpacingScale', label: 'Obstacle spacing ×', min: 0.5, max: 3, step: 0.05, note: 'restart' },

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { RideSimulation } from '../core/simulation';
-import { AUTO_TEX } from './textures';
+import { AUTO_TEX, TEX_SCALE } from './textures';
 import { GROUND_Y, PALETTE as P } from './palette';
 
 export type Mood = 'calm' | 'drinking' | 'nervous' | 'shock' | 'happy' | 'soaked';
@@ -114,10 +114,10 @@ export class AutoView {
         this.frontWheel = scene.add.image(0, 0, 'wheel').setDepth(9);
         const ox = AUTO_TEX.ox / AUTO_TEX.w;
         const oy = AUTO_TEX.oy / AUTO_TEX.h;
-        const back = scene.add.image(0, 0, 'autoBack').setOrigin(ox, oy);
-        this.driverHead = scene.add.image(82, -152, 'driverHead');
+        const back = scene.add.image(0, 0, 'autoBack').setOrigin(ox, oy).setScale(TEX_SCALE);
+        this.driverHead = scene.add.image(82, -152, 'driverHead').setScale(TEX_SCALE);
         this.pax = scene.add.graphics();
-        const front = scene.add.image(0, 0, 'autoFront').setOrigin(ox, oy);
+        const front = scene.add.image(0, 0, 'autoFront').setOrigin(ox, oy).setScale(TEX_SCALE);
         this.arm = scene.add.graphics();
         this.container = scene.add.container(0, 0, [back, this.driverHead, this.pax, front, this.arm]).setDepth(10);
     }
@@ -129,14 +129,14 @@ export class AutoView {
         return { x: c.x + r.x, y: c.y + r.y };
     }
 
-    update(sim: RideSimulation, camX: number, pose: AutoPose): void {
+    update(sim: RideSimulation, camX: number, pose: AutoPose, _dt = 0): void {
         const t = sim.t;
         const R = t.wheelRadiusPx;
         const ms = pose.motionScale;
         const S = t.wheelbasePx / ART_WHEELBASE;
         this.container.setScale(S);
-        this.rearWheel.setScale(S);
-        this.frontWheel.setScale(S);
+        this.rearWheel.setScale(S * TEX_SCALE);
+        this.frontWheel.setScale(S * TEX_SCALE);
         const rearSX = sim.rearX - camX;
         const frontSX = sim.frontX - camX;
 
@@ -152,7 +152,7 @@ export class AutoView {
         const bodyH = s.height * ms + ((rearRoad + frontRoad) / 2) * (1 - ms);
         this.container.setPosition(pose.x, GROUND_Y - R - bodyH);
         this.container.setRotation(-s.pitch * ms);
-        this.shadow.setPosition(pose.x - 6, GROUND_Y + 8).setScale(S * (1 - Math.min(0.25, Math.abs(s.height) / 80)), S);
+        this.shadow.setPosition(pose.x - 6, GROUND_Y + 8).setScale(1 - Math.min(0.25, Math.abs(s.height) / 80), 1);
 
         // driver bobs with the torso spring, slightly delayed look
         const rig = sim.rig;
@@ -169,8 +169,9 @@ export class AutoView {
         g.clear();
         const tDy = -rig.torsoOffset;
         const hDy = -rig.headOffset;
-        const sh: V = { x: SHOULDER.x, y: SHOULDER.y + tDy };
-        const head: V = { x: HEAD.x, y: HEAD.y + hDy };
+        // braking throws the torso/head forward (horizontal springs)
+        const sh: V = { x: SHOULDER.x + rig.torsoX.pos, y: SHOULDER.y + tDy };
+        const head: V = { x: HEAD.x + rig.headX.pos, y: HEAD.y + hDy };
 
         // legs (thigh visible above the body panel)
         g.lineStyle(17, P.ink, 1);
@@ -315,12 +316,12 @@ export class AutoView {
         const p = ease(sim.arm.progress);
         const tDy = -rig.torsoOffset;
         const aDy = -rig.handOffset;
-        const sh: V = { x: SHOULDER.x + 2, y: SHOULDER.y + 2 + tDy };
+        const sh: V = { x: SHOULDER.x + 2 + rig.torsoX.pos, y: SHOULDER.y + 2 + tDy };
 
         // hand follows a curved path lap → lips, plus its own spring offset
         const u = 1 - p;
         const hand: V = {
-            x: u * u * HAND_DOWN.x + 2 * u * p * HAND_CTRL.x + p * p * HAND_UP.x,
+            x: u * u * HAND_DOWN.x + 2 * u * p * HAND_CTRL.x + p * p * HAND_UP.x + rig.handX.pos,
             y: u * u * HAND_DOWN.y + 2 * u * p * HAND_CTRL.y + p * p * HAND_UP.y + aDy,
         };
         const angle = DRINK_ANGLE * ease(Math.min(1, sim.arm.progress * 1.15));

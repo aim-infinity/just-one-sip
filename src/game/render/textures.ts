@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { Rng } from '../core/rng';
 import { PALETTE as P } from './palette';
+import { AUTO_TEX, COW_TEX, drawAutoBack, drawAutoFront, drawDriverHead, drawWheel, drawZebu } from './autoArt';
+import { RS } from './resolution';
 
 /**
  * Procedural placeholder art, drawn once with Canvas 2D into Phaser textures.
@@ -10,14 +12,24 @@ import { PALETTE as P } from './palette';
 
 type Ctx = CanvasRenderingContext2D;
 
-export const AUTO_TEX = { w: 360, h: 230, ox: 180, oy: 200 };
+export { AUTO_TEX };
 
+/** Transparent rows above each tiled background layer. */
+export const TILE_PAD = 6;
+
+/** Images built from canvas textures must be displayed at this scale. */
+export const TEX_SCALE = 1 / RS;
+
+/** Draws a texture at the render scale so it stays crisp (display it with TEX_SCALE). */
 function canvasTex(scene: Phaser.Scene, key: string, w: number, h: number, draw: (c: Ctx) => void): void {
     if (scene.textures.exists(key)) return;
-    const tex = scene.textures.createCanvas(key, w, h);
+    const tex = scene.textures.createCanvas(key, Math.ceil(w * RS), Math.ceil(h * RS));
     if (!tex) return;
     const c = tex.getContext();
+    c.save();
+    c.scale(RS, RS);
     draw(c);
+    c.restore();
     tex.refresh();
 }
 
@@ -267,7 +279,7 @@ function drawProps(c: Ctx, _W: number, H: number) {
     }
 
     // bus stop
-    const bx = 1950;
+    const bx = 1880;
     c.fillStyle = '#c0392b';
     c.fillRect(bx - 80, H - 130, 160, 12);
     c.fillStyle = '#7f8c8d';
@@ -305,11 +317,11 @@ function drawProps(c: Ctx, _W: number, H: number) {
     rr(c, 1460, H - 40, 26, 40, 4);
     c.fill();
     c.fillStyle = '#b9622f';
-    rr(c, 2180, H - 30, 34, 30, 4);
+    rr(c, 1990, H - 30, 34, 30, 4);
     c.fill();
     c.fillStyle = '#3fa265';
     c.beginPath();
-    c.arc(2197, H - 44, 20, 0, Math.PI * 2);
+    c.arc(2007, H - 44, 20, 0, Math.PI * 2);
     c.fill();
 }
 
@@ -351,267 +363,6 @@ function drawRoad(c: Ctx, W: number) {
     c.fillRect(0, 128, W, 4);
 }
 
-// ─── Auto rickshaw ─────────────────────────────────────────────────────────
-
-const L = (x: number) => AUTO_TEX.ox + x;
-const T = (y: number) => AUTO_TEX.oy + y;
-
-function drawAutoBack(c: Ctx) {
-    // far-side canopy fabric / interior shade
-    const g = c.createLinearGradient(0, T(-168), 0, T(-30));
-    g.addColorStop(0, '#2e2a28');
-    g.addColorStop(1, '#4a423d');
-    c.fillStyle = g;
-    c.fillRect(L(-152), T(-168), 280, 140);
-    // floor
-    c.fillStyle = '#2a2523';
-    c.fillRect(L(-152), T(-36), 280, 12);
-    // rear bench
-    c.fillStyle = '#9b2f2f';
-    rr(c, L(-154), T(-142), 20, 66, 6);
-    c.fill();
-    outline(c, 3);
-    c.fillStyle = '#b13a3a';
-    rr(c, L(-152), T(-90), 112, 16, 6);
-    c.fill();
-    outline(c, 3);
-    // fare meter
-    c.fillStyle = '#111';
-    rr(c, L(96), T(-160), 20, 16, 3);
-    c.fill();
-    c.fillStyle = '#e74c3c';
-    c.fillRect(L(112), T(-172), 3, 12);
-    c.fillRect(L(112), T(-172), 10, 6);
-    c.fillStyle = '#ff6b6b';
-    c.fillRect(L(99), T(-156), 14, 6);
-    // driver seat
-    c.fillStyle = '#5a3a2a';
-    rr(c, L(44), T(-124), 12, 46, 4);
-    c.fill();
-    rr(c, L(48), T(-86), 46, 12, 4);
-    c.fill();
-    // steering column + handlebar
-    c.strokeStyle = '#6d7680';
-    c.lineWidth = 7;
-    c.lineCap = 'round';
-    c.beginPath();
-    c.moveTo(L(126), T(-40));
-    c.lineTo(L(116), T(-108));
-    c.stroke();
-    c.strokeStyle = '#1b1b1b';
-    c.lineWidth = 8;
-    c.beginPath();
-    c.moveTo(L(106), T(-112));
-    c.lineTo(L(122), T(-106));
-    c.stroke();
-    // driver body (khaki uniform)
-    const khaki = '#b9a36b';
-    c.strokeStyle = '#8f7c4b';
-    c.lineWidth = 13;
-    c.beginPath();
-    c.moveTo(L(66), T(-84));
-    c.lineTo(L(100), T(-80));
-    c.lineTo(L(108), T(-40));
-    c.stroke();
-    c.fillStyle = khaki;
-    rr(c, L(56), T(-132), 30, 52, 10);
-    c.fill();
-    outline(c, 3);
-    c.strokeStyle = khaki;
-    c.lineWidth = 9;
-    c.beginPath();
-    c.moveTo(L(78), T(-124));
-    c.lineTo(L(98), T(-104));
-    c.lineTo(L(112), T(-109));
-    c.stroke();
-    c.fillStyle = '#a96f47';
-    c.beginPath();
-    c.arc(L(113), T(-109), 5.5, 0, Math.PI * 2);
-    c.fill();
-    // neck
-    c.fillStyle = '#a96f47';
-    c.fillRect(L(70), T(-140), 10, 10);
-}
-
-function drawAutoFront(c: Ctx) {
-    // ── lower body (green) ──
-    c.fillStyle = P.autoGreenCss;
-    rr(c, L(-172), T(-78), 220, 66, [6, 6, 6, 22]);
-    c.fill();
-    outline(c, 4);
-    // floor / footboard to the front panel
-    rr(c, L(40), T(-36), 90, 22, 4);
-    c.fill();
-    outline(c, 4);
-    // front panel ("face")
-    c.beginPath();
-    c.moveTo(L(118), T(-114));
-    c.lineTo(L(142), T(-114));
-    c.lineTo(L(154), T(-62));
-    c.lineTo(L(150), T(-16));
-    c.lineTo(L(120), T(-16));
-    c.closePath();
-    c.fillStyle = P.autoGreenCss;
-    c.fill();
-    outline(c, 4);
-    c.save();
-    c.clip();
-    c.fillStyle = P.yellowCss;
-    c.fillRect(L(110), T(-120), 50, 48);
-    c.restore();
-    c.beginPath();
-    c.moveTo(L(118), T(-114));
-    c.lineTo(L(142), T(-114));
-    c.lineTo(L(154), T(-62));
-    c.lineTo(L(150), T(-16));
-    c.lineTo(L(120), T(-16));
-    c.closePath();
-    outline(c, 4);
-    // yellow band along the body
-    c.fillStyle = P.yellowCss;
-    c.fillRect(L(-170), T(-76), 216, 13);
-    c.fillStyle = P.autoGreenDarkCss;
-    c.fillRect(L(-166), T(-22), 210, 7);
-    // wheel arches (cut out so the wheels show), then rims
-    c.save();
-    c.globalCompositeOperation = 'destination-out';
-    c.beginPath();
-    c.arc(L(-95), T(0), 31, 0, Math.PI * 2);
-    c.fill();
-    c.beginPath();
-    c.arc(L(95), T(0), 31, 0, Math.PI * 2);
-    c.fill();
-    c.restore();
-    c.strokeStyle = P.inkCss;
-    c.lineWidth = 5;
-    c.beginPath();
-    c.arc(L(-95), T(0), 31, Math.PI * 1.02, Math.PI * 1.98);
-    c.stroke();
-    // front mudguard
-    c.strokeStyle = P.autoGreenDarkCss;
-    c.lineWidth = 8;
-    c.beginPath();
-    c.arc(L(95), T(0), 32, Math.PI * 1.1, Math.PI * 1.9);
-    c.stroke();
-    c.strokeStyle = P.inkCss;
-    c.lineWidth = 3;
-    c.beginPath();
-    c.arc(L(95), T(0), 36, Math.PI * 1.1, Math.PI * 1.9);
-    c.stroke();
-    // headlight + indicator
-    c.fillStyle = '#d9d9d9';
-    c.beginPath();
-    c.arc(L(146), T(-86), 10, 0, Math.PI * 2);
-    c.fill();
-    outline(c, 3);
-    c.fillStyle = '#fff7c2';
-    c.beginPath();
-    c.arc(L(147), T(-86), 6, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = '#ff9f1a';
-    rr(c, L(146), T(-58), 7, 6, 2);
-    c.fill();
-    // tail lamp
-    c.fillStyle = '#e74c3c';
-    rr(c, L(-176), T(-62), 7, 16, 2);
-    c.fill();
-    // lettering
-    c.fillStyle = '#fff8d6';
-    c.font = '800 15px "Baloo 2", "Trebuchet MS", sans-serif';
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText('NAMMA AUTO', L(-30), T(-42));
-
-    // ── canopy (black) ──
-    c.fillStyle = P.canopyCss;
-    rr(c, L(-172), T(-188), 316, 22, [26, 14, 4, 4]);
-    c.fill();
-    outline(c, 4);
-    rr(c, L(-172), T(-186), 22, 110, [24, 0, 0, 6]);
-    c.fill();
-    outline(c, 4);
-    c.fillStyle = '#3d3936';
-    c.fillRect(L(-150), T(-182), 290, 4);
-    // windshield frame + glass
-    c.fillStyle = '#2a2a2a';
-    c.fillRect(L(122), T(-168), 10, 56);
-    c.fillStyle = 'rgba(190,230,255,0.85)';
-    c.fillRect(L(132), T(-168), 7, 54);
-    // chrome rod behind the driver
-    c.strokeStyle = '#c8ccd0';
-    c.lineWidth = 4;
-    c.beginPath();
-    c.moveTo(L(42), T(-166));
-    c.lineTo(L(42), T(-78));
-    c.stroke();
-}
-
-function drawWheel(c: Ctx) {
-    const cx = 30;
-    c.fillStyle = '#1c1c1c';
-    c.beginPath();
-    c.arc(cx, cx, 24, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = '#333';
-    for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2;
-        c.save();
-        c.translate(cx + Math.cos(a) * 21, cx + Math.sin(a) * 21);
-        c.rotate(a);
-        c.fillRect(-2, -3, 4, 6);
-        c.restore();
-    }
-    c.fillStyle = '#b8bec4';
-    c.beginPath();
-    c.arc(cx, cx, 13, 0, Math.PI * 2);
-    c.fill();
-    c.strokeStyle = '#7d858c';
-    c.lineWidth = 3;
-    for (let i = 0; i < 5; i++) {
-        const a = (i / 5) * Math.PI * 2;
-        c.beginPath();
-        c.moveTo(cx, cx);
-        c.lineTo(cx + Math.cos(a) * 12, cx + Math.sin(a) * 12);
-        c.stroke();
-    }
-    c.fillStyle = '#4b5258';
-    c.beginPath();
-    c.arc(cx, cx, 4.5, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = '#e74c3c';
-    c.beginPath();
-    c.arc(cx + 9, cx, 2, 0, Math.PI * 2);
-    c.fill();
-}
-
-function drawDriverHead(c: Ctx) {
-    const cx = 22;
-    const cy = 24;
-    c.fillStyle = '#a96f47';
-    c.beginPath();
-    c.arc(cx, cy, 14, 0, Math.PI * 2);
-    c.fill();
-    outline(c, 3);
-    c.fillStyle = '#1d1512';
-    c.beginPath();
-    c.arc(cx - 2, cy - 5, 13, Math.PI * 1.02, Math.PI * 1.95);
-    c.fill();
-    c.fillRect(cx - 15, cy - 6, 8, 8);
-    // eye, nose, moustache
-    c.fillStyle = '#1d1512';
-    c.beginPath();
-    c.arc(cx + 7, cy - 2, 2, 0, Math.PI * 2);
-    c.fill();
-    c.fillRect(cx + 4, cy - 7, 7, 2);
-    c.beginPath();
-    c.ellipse(cx + 9, cy + 6, 7, 3, -0.1, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = '#8a5838';
-    c.beginPath();
-    c.arc(cx - 3, cy + 1, 3.5, 0, Math.PI * 2);
-    c.fill();
-}
-
 function drawCloud(c: Ctx) {
     c.fillStyle = 'rgba(255,255,255,0.9)';
     for (const [x, y, r] of [
@@ -647,21 +398,30 @@ export function makeTextures(scene: Phaser.Scene): void {
     canvasTex(scene, 'sky', 4, 512, drawSky);
     canvasTex(scene, 'sun', 120, 120, drawSun);
     canvasTex(scene, 'cloud', 160, 80, drawCloud);
-    canvasTex(scene, 'skyline', 1600, 300, (c) => drawSkyline(c, 1600, 300));
-    canvasTex(scene, 'midrow', 1800, 300, (c) => drawMidrow(c, 1800, 300));
-    canvasTex(scene, 'props', 2400, 210, (c) => drawProps(c, 2400, 210));
+    // Tiled layers get a transparent top margin so texture wrapping can't
+    // bleed their opaque bottom edge into the sky as a faint line.
+    const padded = (draw: (c: Ctx) => void) => (c: Ctx) => {
+        c.translate(0, TILE_PAD);
+        draw(c);
+    };
+    canvasTex(scene, 'skyline', 1600, 300 + TILE_PAD, padded((c) => drawSkyline(c, 1600, 300)));
+    canvasTex(scene, 'midrow', 1800, 300 + TILE_PAD, padded((c) => drawMidrow(c, 1800, 300)));
+    canvasTex(scene, 'props', 2040, 210 + TILE_PAD, padded((c) => drawProps(c, 2040, 210)));
     canvasTex(scene, 'road', 512, 220, (c) => drawRoad(c, 512));
-    canvasTex(scene, 'wheel', 60, 60, drawWheel);
+    canvasTex(scene, 'wheel', 64, 64, drawWheel);
     canvasTex(scene, 'autoBack', AUTO_TEX.w, AUTO_TEX.h, drawAutoBack);
     canvasTex(scene, 'autoFront', AUTO_TEX.w, AUTO_TEX.h, drawAutoFront);
+    canvasTex(scene, 'zebu', COW_TEX.w, COW_TEX.h, drawZebu);
     canvasTex(scene, 'driverHead', 44, 44, drawDriverHead);
-    // composite auto for menus / share card
+    // composite auto for the HUD / share card (no characters)
     canvasTex(scene, 'autoIcon', AUTO_TEX.w, AUTO_TEX.h + 10, (c) => {
         const src = (k: string) => scene.textures.get(k).getSourceImage() as HTMLCanvasElement;
-        c.drawImage(src('autoBack'), 0, 0);
-        c.drawImage(src('driverHead'), L(60), T(-170));
-        c.drawImage(src('wheel'), L(-95) - 30, T(0) - 30);
-        c.drawImage(src('wheel'), L(95) - 30, T(0) - 30);
-        c.drawImage(src('autoFront'), 0, 0);
+        const W = AUTO_TEX.w;
+        const H = AUTO_TEX.h;
+        c.drawImage(src('autoBack'), 0, 0, W, H);
+        c.drawImage(src('driverHead'), AUTO_TEX.ox + 60, AUTO_TEX.oy - 174, 44, 44);
+        c.drawImage(src('wheel'), AUTO_TEX.ox - 95 - 32, AUTO_TEX.oy - 32, 64, 64);
+        c.drawImage(src('wheel'), AUTO_TEX.ox + 95 - 32, AUTO_TEX.oy - 32, 64, 64);
+        c.drawImage(src('autoFront'), 0, 0, W, H);
     });
 }

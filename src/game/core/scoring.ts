@@ -12,19 +12,25 @@ export interface RideResult {
     seed: number;
 }
 
-/** Score: reward drinking, punish spilling, bonus for finishing early. */
+/**
+ * Score: reward drinking, punish spilling hard, and reward *clean* finishes
+ * more than fast ones — so sipping through every pothole never pays off.
+ */
 export function computeScore(r: RideResult): number {
-    const base = r.consumedMl * 10 - r.spilledMl * 4;
-    const win = r.outcome === 'won' ? 1000 + Math.max(0, r.routeM - r.distanceM) * 20 : 0;
-    const clean = r.outcome === 'won' && r.spilledMl < 1 ? 500 : 0;
-    return Math.max(0, Math.round(base + win + clean));
+    const base = r.consumedMl * 10 - r.spilledMl * 20;
+    let bonus = 0;
+    if (r.outcome === 'won') {
+        const st = stars(r);
+        bonus = 1000 + Math.max(0, r.routeM - r.distanceM) * 5 + (st === 3 ? 1000 : st === 2 ? 400 : 0);
+    }
+    return Math.max(0, Math.round(base + bonus));
 }
 
 /** 0–3 stars for the share card. */
 export function stars(r: RideResult): number {
     if (r.outcome !== 'won') return r.consumedMl >= r.capacityMl * 0.6 ? 1 : 0;
     if (r.spilledMl < 10) return 3;
-    return r.spilledMl < 40 ? 2 : 1;
+    return r.spilledMl < 35 ? 2 : 1;
 }
 
 export function headline(r: RideResult): string {
@@ -32,7 +38,7 @@ export function headline(r: RideResult): string {
         case 'won':
             return 'BOTTLE FINISHED!';
         case 'spilledOut':
-            return 'BOTTLE EMPTY. STILL THIRSTY.';
+            return 'IT ALL SPILLED!';
         default:
             return 'ARRIVED THIRSTY';
     }
@@ -45,8 +51,8 @@ export function verdict(r: RideResult): string {
     const pool: string[] = [];
     if (r.outcome === 'won') {
         if (s < 1) pool.push('Not a single drop. Are you even in Bangalore?', 'Smooth operator. The potholes are filing a complaint.');
+        else if (s > 35) pool.push('Hydrated. Your shirt is also hydrated.', 'You won, but the seat cover drank a lot too.', `Bottle done. ${Math.round(s)} ml went to the auto floor.`);
         else if (left > 60) pool.push('Finished before the driver asked for ₹20 extra.', 'Hydrated with a whole Cubbon Park to spare.');
-        else if (s > 50) pool.push('Hydrated. Your shirt is also hydrated.', 'You won, but the seat cover drank a lot too.');
         else pool.push('Hydration achieved. Namma roads defeated.', 'One bottle, zero regrets. Mostly.');
     } else if (r.outcome === 'spilledOut') {
         pool.push("You survived the road. The water didn't.", 'Bangalore drank more than you.');

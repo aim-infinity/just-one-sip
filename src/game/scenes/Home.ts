@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { designWidth, setupCamera } from '../render/resolution';
 import { HAZARDS } from '../config/hazards';
 import { TUNING } from '../config/tuning';
 import { Road } from '../core/road';
@@ -37,7 +38,8 @@ export class Home extends Phaser.Scene {
     }
 
     create(): void {
-        const W = this.scale.width;
+        setupCamera(this);
+        const W = designWidth(this);
         this.acc = 0;
         this.sim = new RideSimulation(TUNING, new Road([], Infinity), { seed: 1, practice: true });
         this.world = new WorldView(this, this.sim, W);

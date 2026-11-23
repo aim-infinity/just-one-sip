@@ -14,6 +14,11 @@ export class BrakeController {
     private t = 0;
     factor = 1;
 
+    /** Seconds left at the bottom of the brake (signals turn amber near the end). */
+    get holdLeft(): number {
+        return this.phase === 'hold' && this.def ? this.def.holdSec - this.t : 0;
+    }
+
     get active(): boolean {
         return this.hazard !== null;
     }

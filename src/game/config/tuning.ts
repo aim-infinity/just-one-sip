@@ -17,8 +17,9 @@ export const TUNING = {
     fixedStep: 1 / 120,
 
     // ── World & route ───────────────────────────────────────────────────
-    /** World pixels per metre (used only for the distance read-out). */
-    pxPerMeter: 60,
+    /** World pixels per metre. Matches the auto's drawn size (≈2.5 m wheelbase-to-bumper),
+     *  so on-screen speed looks like the real m/s value. */
+    pxPerMeter: 100,
     /** Multiplies the whole speed curve (see SPEED_PROFILE below). 1 = default. */
     speedScale: 1,
     /** Route length in metres. ≈40 s ride along SPEED_PROFILE. */
@@ -29,15 +30,14 @@ export const TUNING = {
     wheelbasePx: 247,
     wheelRadiusPx: 31,
     /** Where the auto sits horizontally, as a fraction of screen width. */
-    autoAnchorFraction: 0.3,
+    autoAnchorFraction: 0.24,
     /** Where the passenger's seat is along the wheelbase (0 = rear axle). */
     seatFraction: 0.12,
 
     // ── Bottle & drinking ───────────────────────────────────────────────
     capacityMl: 250,
-    /** You must have drunk at least this much when the bottle empties to win.
-     *  capacity − this = the spill limit (50 ml): spill more and the ride ends. */
-    winMinConsumedMl: 200,
+    /** Finish the bottle before your stop to win — spills never block a win.
+     *  You only lose by arriving with water left, or by spilling every last drop. */
     /** Flow rate into the mouth while the bottle is correctly at the lips. */
     drinkRateMlPerSec: 11,
 

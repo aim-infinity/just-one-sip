@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { designWidth, setupCamera } from '../render/resolution';
+import { DESIGN_HEIGHT } from '../render/palette';
 import { HAZARDS } from '../config/hazards';
 import { TUNING, speedPx } from '../config/tuning';
 import { randomSeed } from '../core/rng';
@@ -72,7 +74,8 @@ export class Play extends Phaser.Scene {
     }
 
     create(): void {
-        const W = this.scale.width;
+        setupCamera(this);
+        const W = designWidth(this);
         const tutorial = this.mode === 'tutorial';
         const route = tutorial ? undefined : generateRoute(this.seed, TUNING);
         const road = route ? new Road(route.hazards, route.lengthPx) : new Road([], Infinity);
@@ -157,7 +160,30 @@ export class Play extends Phaser.Scene {
         this.world.onEvent(e);
         const reduced = settings.reducedMotion;
         switch (e.kind) {
+            case 'brake': {
+                sound.brake(e.severity);
+                vibrate(30);
+                if (!reduced) this.cameras.main.shake(160, 0.002 * e.severity);
+                const drv = this.world.auto.toScreen({ x: 90, y: -175 });
+                if (e.hazard.type === 'cow') {
+                    sound.horn();
+                    sound.moo();
+                    this.popText('POM! POM!', P.yellow, drv);
+                    const cowX = e.hazard.x + e.hazard.width - this.world.camX + 30;
+                    this.time.delayedCall(250, () => this.popText('MOO!', 0xffffff, { x: cowX, y: 520 }));
+                } else {
+                    this.popText('Red light!', P.red, drv);
+                }
+                break;
+            }
+            case 'go':
+                if (e.hazard.type === 'signal') {
+                    sound.horn();
+                    this.popText('Green! Go go go', P.green, this.world.auto.toScreen({ x: 90, y: -175 }));
+                }
+                break;
             case 'kick':
+                if (e.hazard.type === 'manhole' && e.severity > 0.3) sound.clank();
                 if (e.severity > 0.12) sound.bump(e.severity);
                 if (e.severity > 0.5) {
                     vibrate(Math.round(12 + e.severity * 25));
@@ -238,8 +264,8 @@ export class Play extends Phaser.Scene {
     }
 
     private showPauseMenu(): void {
-        const W = this.scale.width;
-        const H = this.scale.height;
+        const W = designWidth(this);
+        const H = DESIGN_HEIGHT;
         const dim = this.add.rectangle(0, 0, W, H, P.ink, 0.55).setOrigin(0).setInteractive();
         const box = panel(this, W / 2, H / 2, 560, 470);
         const head = title(this, W / 2, H / 2 - 170, 'PAUSED', 56);
@@ -275,7 +301,7 @@ export class Play extends Phaser.Scene {
 
     // ─── Tutorial ──────────────────────────────────────────────────────────
     private buildTutorial(): void {
-        const W = this.scale.width;
+        const W = designWidth(this);
         const bg = this.add.graphics();
         const text = this.add
             .text(0, 0, '', { fontFamily: FONT, fontSize: '30px', color: '#ffffff', fontStyle: '800', align: 'center', wordWrap: { width: 640 } })
@@ -317,7 +343,7 @@ export class Play extends Phaser.Scene {
         if (step === 'pothole' || step === 'oops') this.spawnTutorialPothole();
         if (step === 'done') {
             this.hud.hideHint();
-            const W = this.scale.width;
+            const W = designWidth(this);
             const btn = makeButton(this, W / 2 + 60, 330, 'START RIDE  🛺', () => this.finishTutorial(), {
                 width: 330,
                 height: 82,
@@ -330,7 +356,7 @@ export class Play extends Phaser.Scene {
 
     private spawnTutorialPothole(): void {
         const d = HAZARDS.pothole;
-        const ahead = (this.scale.width - this.world.autoX) + 80;
+        const ahead = (designWidth(this) - this.world.autoX) + 80;
         this.tutHazard = this.sim.road.add({ type: 'pothole', x: this.sim.frontX + ahead, width: 95, depth: 15, impact: 1, kicks: d.kicks, block: 0 });
         this.tutSpillAtStart = this.sim.bottle.spilledMl;
     }

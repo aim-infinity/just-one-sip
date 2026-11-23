@@ -77,9 +77,9 @@ describe('Ride state transitions', () => {
         expect(sim.time).toBeLessThan(43);
     });
 
-    it('spilling the bottle empty before drinking enough loses', () => {
+    it('spilling the whole bottle loses', () => {
         const sim = new RideSimulation(t, new Road([], 1e9), { seed: 1 });
-        sim.bottle.spill(200);
+        sim.bottle.spill(250);
         while (sim.state === 'playing') sim.step(dt, true);
         expect(sim.outcome).toBe('spilledOut');
     });
