@@ -1,15 +1,23 @@
 import { settings } from './settings';
 
 /**
- * All sound is synthesised with the Web Audio API — no audio files.
+ * Sound uses the Web Audio API. The auto's diesel engine is a recording
+ * (public/audio/engine-loop.m4a + engine-rev.m4a, ~130 KB); everything else
+ * is synthesised. The synth engine covers the moment before the recording loads.
  * The AudioContext is only created/resumed from a user gesture (`unlock()`),
  * which satisfies iOS/Android autoplay rules.
  */
+/** Loop points inside public/audio/engine-loop.m4a (see the README's audio note) and mix levels. */
+const ENGINE_LOOP = { start: 0.25, end: 12.25, volume: 0.3, revVolume: 0.32 };
+
 class SoundEngine {
     private ctx: AudioContext | null = null;
     private master: GainNode | null = null;
     private noise: AudioBuffer | null = null;
-    private engine: { stop: () => void; setLoad: (v: number) => void } | null = null;
+    private engine: { kind: 'sample' | 'synth'; stop: () => void; setLoad: (v: number) => void; setSpeed: (v: number) => void } | null = null;
+    /** Recorded diesel auto (public/audio). Until it loads (or if it can't), the synth engine plays. */
+    private samples: { loop?: AudioBuffer; rev?: AudioBuffer } = {};
+    private samplesRequested = false;
     private rainNode: { stop: () => void } | null = null;
 
     get ready(): boolean {
@@ -30,6 +38,7 @@ class SoundEngine {
                 this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
                 const d = this.noise.getChannelData(0);
                 for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+                this.loadSamples();
             }
             if (this.ctx.state === 'suspended') void this.ctx.resume();
         } catch {
@@ -87,10 +96,106 @@ class SoundEngine {
         s.stop(t + dur + 0.05);
     }
 
-    /** Putt-putt two-stroke engine + road rumble loop. */
+    /** Fetch + decode the recorded engine. Same-origin, ~130 KB, once per session. */
+    private loadSamples(): void {
+        const c = this.ctx;
+        if (!c || this.samplesRequested) return;
+        this.samplesRequested = true;
+        const load = (url: string) =>
+            fetch(url)
+                .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(url))))
+                // callback form: older iOS Safari has no promise-returning decodeAudioData
+                .then((b) => new Promise<AudioBuffer>((res, rej) => c.decodeAudioData(b, res, rej)));
+        load('audio/engine-loop.m4a')
+            .then((b) => {
+                this.samples.loop = b;
+                // a ride already running on the synth engine switches over seamlessly
+                if (this.engine?.kind === 'synth') {
+                    this.stopEngine();
+                    this.startEngine();
+                }
+            })
+            .catch(() => {
+                /* keep the synth engine */
+            });
+        load('audio/engine-rev.m4a')
+            .then((b) => (this.samples.rev = b))
+            .catch(() => {});
+    }
+
+    /** Diesel auto: the recorded loop if it has loaded, otherwise the synth fallback. */
     startEngine(): void {
         const c = this.ctx;
         if (!c || !this.master || !this.noise || this.engine) return;
+        if (this.samples.loop) this.startSampleEngine(this.samples.loop);
+        else this.startSynthEngine();
+    }
+
+    /**
+     * Recorded diesel engine loop. The file is padded on both sides so the
+     * loop points (0.25 s → 12.25 s) stay seamless whatever the AAC decoder
+     * does at the edges. Pitch follows road speed (idle when stopped at a
+     * signal), and bumps add load + road rumble.
+     */
+    private startSampleEngine(buf: AudioBuffer): void {
+        const c = this.ctx!;
+        const out = c.createGain();
+        out.gain.value = 0.0001;
+        out.gain.setTargetAtTime(1, c.currentTime, 0.25);
+        out.connect(this.master!);
+
+        const src = c.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        src.loopStart = ENGINE_LOOP.start;
+        src.loopEnd = ENGINE_LOOP.end;
+        const eg = c.createGain();
+        eg.gain.value = ENGINE_LOOP.volume;
+        src.connect(eg).connect(out);
+
+        const rumble = c.createBufferSource();
+        rumble.buffer = this.noise;
+        rumble.loop = true;
+        const rlp = c.createBiquadFilter();
+        rlp.type = 'lowpass';
+        rlp.frequency.value = 160;
+        const rg = c.createGain();
+        rg.gain.value = 0.05;
+        rumble.connect(rlp).connect(rg).connect(out);
+
+        // start somewhere random in the loop so every ride sounds a little different
+        src.start(c.currentTime, ENGINE_LOOP.start + Math.random() * (ENGINE_LOOP.end - ENGINE_LOOP.start));
+        rumble.start();
+        let speed = 0.7;
+        let load = 0;
+        const apply = () => {
+            src.playbackRate.setTargetAtTime(0.82 + speed * 0.18 + load * 0.08, c.currentTime, 0.12);
+            eg.gain.setTargetAtTime(ENGINE_LOOP.volume * (0.85 + speed * 0.15 + load * 0.3), c.currentTime, 0.08);
+        };
+        apply();
+        this.engine = {
+            kind: 'sample',
+            stop: () => {
+                out.gain.setTargetAtTime(0.0001, c.currentTime, 0.15);
+                src.stop(c.currentTime + 0.6);
+                rumble.stop(c.currentTime + 0.6);
+            },
+            setLoad: (v: number) => {
+                load = v;
+                rg.gain.setTargetAtTime(0.05 + v * 0.25, c.currentTime, 0.03);
+                apply();
+            },
+            setSpeed: (v: number) => {
+                speed = v;
+                apply();
+            },
+        };
+    }
+
+    /** Putt-putt engine synthesised on the fly (fallback while/if the recording can't load). */
+    private startSynthEngine(): void {
+        const c = this.ctx!;
+        if (!this.master || !this.noise) return;
         const out = c.createGain();
         out.gain.value = 0.0001;
         out.gain.setTargetAtTime(1, c.currentTime, 0.3);
@@ -131,6 +236,8 @@ class SoundEngine {
         const nodes = [o1, o2, lfo, rumble];
         nodes.forEach((n) => n.start());
         this.engine = {
+            kind: 'synth',
+            setSpeed: () => {},
             stop: () => {
                 out.gain.setTargetAtTime(0.0001, c.currentTime, 0.15);
                 nodes.forEach((n) => n.stop(c.currentTime + 0.6));
@@ -149,6 +256,24 @@ class SoundEngine {
 
     engineLoad(v: number): void {
         this.engine?.setLoad(Math.min(1, v));
+    }
+
+    /** Road speed, 0 = stopped (idle) … 1 = top speed. */
+    engineSpeed(v: number): void {
+        this.engine?.setSpeed(Math.max(0, Math.min(1, v)));
+    }
+
+    /** Diesel rev as the auto pulls away (ride start, green light). */
+    engineRev(): void {
+        const c = this.ctx;
+        const buf = this.samples.rev;
+        if (!c || !this.master || !buf || settings.muted) return;
+        const src = c.createBufferSource();
+        src.buffer = buf;
+        const g = c.createGain();
+        g.gain.value = ENGINE_LOOP.revVolume;
+        src.connect(g).connect(this.master);
+        src.start();
     }
 
     bump(severity: number): void {

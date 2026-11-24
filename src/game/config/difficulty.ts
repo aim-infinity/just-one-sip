@@ -1,9 +1,11 @@
 import type { HazardType } from './hazards';
 
 /**
- * Difficulty is shaped by *timing* and a gently rising, capped speed
+ * Difficulty is shaped by *timing* and a fast-climbing, capped speed
  * (see SPEED_PROFILE in tuning.ts). The route is split into three sections by
- * fraction of distance travelled.
+ * fraction of distance travelled, chosen so they cover roughly the first
+ * quarter, middle half and last quarter of the ride's *time* (the slow start
+ * covers little ground). Re-tune `until` if SPEED_PROFILE changes.
  */
 export interface SectionConfig {
     name: 'opening' | 'middle' | 'final';
@@ -23,7 +25,7 @@ export interface SectionConfig {
 export const SECTIONS: SectionConfig[] = [
     {
         name: 'opening',
-        until: 0.25,
+        until: 0.11,
         weights: { pothole: 3, speedBreaker: 3, manhole: 2, signal: 1 },
         gapSec: [3.4, 4.2],
         comboChance: 0,
@@ -32,8 +34,8 @@ export const SECTIONS: SectionConfig[] = [
     },
     {
         name: 'middle',
-        until: 0.75,
-        weights: { pothole: 4, speedBreaker: 2, uneven: 2, waterlogged: 1, manhole: 2, rumbleStrip: 2, cow: 1.5, signal: 1, gravel: 1 },
+        until: 0.7,
+        weights: { pothole: 4, speedBreaker: 2, uneven: 2, waterlogged: 1, manhole: 2, rumbleStrip: 2, signal: 1, gravel: 1 },
         gapSec: [3.0, 3.9],
         comboChance: 0.2,
         safeEvery: 3,
@@ -42,7 +44,7 @@ export const SECTIONS: SectionConfig[] = [
     {
         name: 'final',
         until: 1.01,
-        weights: { pothole: 4, speedBreaker: 1, uneven: 2, waterlogged: 3, manhole: 2, rumbleStrip: 1, cow: 2, gravel: 1.5 },
+        weights: { pothole: 4, speedBreaker: 1, uneven: 2, waterlogged: 3, manhole: 2, rumbleStrip: 1, gravel: 1.5 },
         gapSec: [1.6, 2.4],
         comboChance: 0.35,
         safeEvery: 3,
@@ -65,15 +67,16 @@ export const ROUTE_LAYOUT = {
 };
 
 /**
- * The massive pothole (passenger-ejection easter egg). Never part of the
- * weighted section mix: at most one per ride, decided by its own RNG stream
- * so it doesn't reshuffle the rest of a seed's layout.
+ * The massive pothole (passenger-ejection event). Never part of the weighted
+ * section mix: exactly one per ride, at a random point decided by its own RNG
+ * stream so it doesn't reshuffle the rest of a seed's layout. If that point is
+ * too close to the finish, it goes in the last slot before the stop.
  */
 export const MASSIVE_POTHOLE = {
-    /** Chance a ride contains one. */
-    chance: 0.25,
-    /** Route progress window where it may appear (keeps it out of the opening). */
-    window: [0.4, 0.8] as [number, number],
+    /** Chance a ride contains one (1 = every ride, every driver × weather). */
+    chance: 1,
+    /** Route progress window where it may appear: anywhere after the opening, up to the very end. */
+    window: [0.35, 0.95] as [number, number],
     /** Clear road before it (s), so it's on screen and readable well before impact. */
     leadSec: 1.8,
     /** Clear road after it (s). */

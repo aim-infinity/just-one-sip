@@ -9,6 +9,8 @@ export interface ButtonOpts {
     textColor?: string;
     fontSize?: number;
     depth?: number;
+    /** Emoji drawn to the right of the label, mirrored so it faces right (🛺 faces left on most platforms). */
+    emoji?: string;
 }
 
 /**
@@ -48,24 +50,41 @@ export function makeButton(
             fontStyle: '800',
         })
         .setOrigin(0.5, 0.56);
-    const c = scene.add.container(x, y, [shadow, body, text]).setSize(w, h + 8);
+    const parts: Phaser.GameObjects.GameObject[] = [shadow, body, text];
+    let icon: Phaser.GameObjects.Text | undefined;
+    if (opts.emoji) {
+        icon = scene.add
+            .text(0, 0, opts.emoji, { fontFamily: FONT, fontSize: `${opts.fontSize ?? 32}px` })
+            .setOrigin(0.5, 0.56)
+            .setScale(-1, 1);
+        const gap = 12;
+        const total = text.width + gap + icon.width;
+        text.x = -total / 2 + text.width / 2;
+        icon.x = text.x + text.width / 2 + gap + icon.width / 2;
+        parts.push(icon);
+    }
+    const setPressed = (p: boolean) => {
+        text.y = p ? 5 : 0;
+        if (icon) icon.y = p ? 5 : 0;
+    };
+    const c = scene.add.container(x, y, parts).setSize(w, h + 8);
     if (opts.depth !== undefined) c.setDepth(opts.depth);
     c.setInteractive({ useHandCursor: true });
     let down = false;
     c.on('pointerdown', () => {
         down = true;
         draw(true);
-        text.y = 5;
+        setPressed(true);
         sound.unlock();
     });
     c.on('pointerout', () => {
         down = false;
         draw(false);
-        text.y = 0;
+        setPressed(false);
     });
     c.on('pointerup', () => {
         draw(false);
-        text.y = 0;
+        setPressed(false);
         if (!down) return;
         down = false;
         sound.click();

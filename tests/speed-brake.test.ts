@@ -15,11 +15,14 @@ function signal(x: number) {
 }
 
 describe('Speed ramp', () => {
-    it('rises from 6 m/s to a 9 m/s cap and never exceeds it', () => {
+    it('climbs fast (Dino-style) from 5 m/s (18 km/h) to a 22.3 m/s (80 km/h) top speed and never exceeds it', () => {
         const start = speedPxAt(t, 0) / t.pxPerMeter;
         const end = speedPxAt(t, 1) / t.pxPerMeter;
-        expect(start).toBeCloseTo(6, 5);
-        expect(end).toBeCloseTo(9, 5);
+        expect(start).toBeCloseTo(5, 5);
+        expect(end).toBeCloseTo(22.3, 5);
+        // the climb is quick: top speed is reached within the first fifth of the route
+        expect(speedPxAt(t, 0.1)).toBeGreaterThan(speedPxAt(t, 0) * 2);
+        expect(speedPxAt(t, 0.2) / t.pxPerMeter).toBeCloseTo(22.3, 5);
         let prev = 0;
         for (let p = 0; p <= 1.2; p += 0.01) {
             const v = speedPxAt(t, p) / t.pxPerMeter;

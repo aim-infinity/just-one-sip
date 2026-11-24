@@ -125,7 +125,7 @@ export function minClearSec(t: Tuning, type: HazardType, v: number): number {
     return t.wheelbasePx / v + Math.max(t.reactionTimeSec, HAZARDS[type].minSpacingSec);
 }
 
-/** Whether a ride gets a massive pothole: 'random' (rare), 'always' (QA / ?massive), 'never'. */
+/** Whether a ride gets a massive pothole: 'random' (MASSIVE_POTHOLE.chance), 'always', 'never'. */
 export type MassiveMode = 'random' | 'always' | 'never';
 
 export interface RouteOptions {
@@ -153,7 +153,9 @@ function layoutOnce(seed: number, t: Tuning, relax: number, mods: RideMods, opts
     const finish = length + t.wheelbasePx;
     const end = finish - ROUTE_LAYOUT.finishClearSec * frontSpeed(t, finish, mul);
     const hazards: Omit<Hazard, 'id'>[] = [];
-    let x = t.wheelbasePx + ROUTE_LAYOUT.firstHazardSec * frontSpeed(t, t.wheelbasePx, mul);
+    // first hazard after `firstHazardSec` of actual travel (the auto speeds up as it goes)
+    let x = t.wheelbasePx;
+    while (travelSec(t, t.wheelbasePx, x, mul) < ROUTE_LAYOUT.firstHazardSec) x += 10;
     let block = 0;
 
     while (x < end) {
@@ -162,17 +164,19 @@ function layoutOnce(seed: number, t: Tuning, relax: number, mods: RideMods, opts
         if (massive) {
             // guarantee a long clear run-up so it's visible and avoidable
             x = Math.max(x, prevEnd + MASSIVE_POTHOLE.leadSec * frontSpeed(t, prevEnd, mul));
-            massivePlaced = true;
         }
         const type: HazardType = massive ? 'massivePothole' : rng.weighted(sectionWeights(section, mods));
         const first = makeHazard(rng, type, x, block, t, mul);
         if (first.x + first.width > end) break;
         hazards.push(first);
+        if (massive) massivePlaced = true;
         let last = first;
 
         if (!massive && HAZARDS[type].comboable && section.comboChance > 0 && rng.chance(section.comboChance)) {
             const comboType = rng.pick(COMBO_TYPES);
-            const cx = last.x + last.width + t.comboGapSec * frontSpeed(t, last.x, mul);
+            // speed rises across the gap, so size it at the (faster) far end
+            const gx = last.x + last.width;
+            const cx = gx + t.comboGapSec * frontSpeed(t, gx + t.comboGapSec * frontSpeed(t, gx, mul), mul);
             const second = makeHazard(rng, comboType, cx, block, t, mul);
             if (second.x + second.width < end) {
                 hazards.push(second);
@@ -188,6 +192,15 @@ function layoutOnce(seed: number, t: Tuning, relax: number, mods: RideMods, opts
         if (massive) gap = Math.max(gap, MASSIVE_POTHOLE.trailSec);
         prevEnd = last.x + last.width;
         x = prevEnd + gap * v;
+    }
+    // Planned but didn't fit before the stop: clear the tail and put it in the last slot.
+    if (massiveAt !== null && !massivePlaced) {
+        const v = frontSpeed(t, end, mul);
+        const lead = MASSIVE_POTHOLE.leadSec * v;
+        const w = HAZARDS.massivePothole.widthPx[1];
+        const tailEnd = () => (hazards.length ? hazards[hazards.length - 1].x + hazards[hazards.length - 1].width : t.wheelbasePx);
+        while (hazards.length && tailEnd() + lead > end - w) hazards.pop();
+        hazards.push(makeHazard(rng, 'massivePothole', Math.max(tailEnd() + lead, end - w - lead * 0.5), block, t, mul));
     }
     return { seed, lengthPx: length, hazards };
 }

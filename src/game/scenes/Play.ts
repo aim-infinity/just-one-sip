@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { RS, SAFE, designWidth, setupCamera } from '../render/resolution';
 import { DESIGN_HEIGHT } from '../render/palette';
 import { HAZARDS } from '../config/hazards';
-import { TUNING, speedPx } from '../config/tuning';
+import { TOP_SPEED_MPS, TUNING, speedPx } from '../config/tuning';
 import { DEFAULT_MODS, rideMods, type RideMods } from '../config/ride';
 import { randomSeed } from '../core/rng';
 import { generateRoute, Road, type Hazard } from '../core/road';
@@ -13,6 +13,7 @@ import { Hud } from '../render/Hud';
 import { FONT, PALETTE as P } from '../render/palette';
 import { drawPauseIcon, drawSpeaker, label, makeButton, makeIconButton, panel, title } from '../render/ui';
 import { WorldView } from '../render/WorldView';
+import { HEAD } from '../render/AutoView';
 import { vibrate } from '../systems/haptics';
 import { HoldInput } from '../systems/input';
 import { recordRide, saveSettings, settings, type Best } from '../systems/settings';
@@ -65,6 +66,8 @@ export class Play extends Phaser.Scene {
     private mods: RideMods = DEFAULT_MODS;
     private lastLineAt = -99;
     private saidFor = new Set<number>();
+    /** Last 10 km/h step announced (Dino-style speed-up feedback). */
+    private speedStep = 0;
     private ejection?: EjectionController;
     private topButtons: Phaser.GameObjects.Container[] = [];
 
@@ -95,6 +98,7 @@ export class Play extends Phaser.Scene {
         this.mods = tutorial ? DEFAULT_MODS : rideMods(settings.driver, settings.weather);
         this.lastLineAt = -99;
         this.saidFor = new Set();
+        this.speedStep = 0;
         const route = tutorial ? undefined : generateRoute(this.seed, TUNING, this.mods, { massive: urlMassive() ? 'always' : 'random' });
         const road = route ? new Road(route.hazards, route.lengthPx) : new Road([], Infinity);
         this.sim = new RideSimulation(TUNING, road, { seed: this.seed, practice: tutorial, mods: this.mods });
@@ -104,6 +108,10 @@ export class Play extends Phaser.Scene {
         this.hold.onPress = () => {
             sound.unlock();
             sound.startEngine();
+            if (!this.firstPress) {
+                sound.engineRev();
+                this.world.exhaustBurst();
+            }
             if (this.mods.weather.id === 'rainy') sound.startRain();
             if (!this.firstPress) {
                 this.firstPress = true;
@@ -179,6 +187,8 @@ export class Play extends Phaser.Scene {
         this.ejection?.update(dt);
         this.hud.update();
         sound.engineLoad(Math.abs(this.sim.suspension.velocityAt(0.5)) / 300);
+        sound.engineSpeed(this.sim.speed / (TOP_SPEED_MPS * this.sim.t.pxPerMeter));
+        if (this.mode === 'ride') this.speedMilestones();
         if (this.mode === 'tutorial') this.updateTutorial(dt);
         else this.overconfidentBanter();
     }
@@ -195,7 +205,7 @@ export class Play extends Phaser.Scene {
                 if (e.hazard.type === 'cow') {
                     sound.horn();
                     sound.moo();
-                    this.driverSays(['POM! POM!'], true);
+                    this.driverSays(['Honk honk!'], true);
                     const cowX = e.hazard.x + e.hazard.width - this.world.camX + 30;
                     this.time.delayedCall(250, () => this.popText('MOO!', 0xffffff, { x: cowX, y: 520 }));
                 } else if (e.hazard.type === 'cutIn') {
@@ -208,15 +218,17 @@ export class Play extends Phaser.Scene {
             }
             case 'skid':
                 sound.brake(0.6);
-                this.popText('Skiiid!', 0xbfe4ff, this.world.auto.toScreen({ x: 120, y: -10 }));
+                this.popText('Skiiid!', 0xbfe4ff, this.world.auto.toScreen({ x: 150, y: -10 }));
                 break;
             case 'slowing':
                 if (this.mods.driver.lines.slowing && Math.random() < 0.5) this.driverSays(this.mods.driver.lines.slowing);
                 break;
             case 'go':
                 if (e.hazard.type === 'signal') {
+                    sound.engineRev();
+                    this.world.exhaustBurst();
                     sound.horn();
-                    this.driverSays(['Green! Go go go!'], true);
+                    this.driverSays(['Green light!'], true);
                 }
                 break;
             case 'kick':
@@ -275,7 +287,20 @@ export class Play extends Phaser.Scene {
         this.world.say(lines[Math.floor(Math.random() * lines.length)]);
     }
 
-    /** "Road super saar!" — said with total confidence right before a pothole. */
+    /** Every 10 km/h the cruising speed climbs, flash a little "Speeding up!" (like Dino's score flash). */
+    private speedMilestones(): void {
+        if (this.sim.state !== 'playing' || this.sim.time <= 0) return;
+        const kmh = (this.sim.cruiseSpeed / this.sim.t.pxPerMeter) * 3.6;
+        const step = Math.floor(kmh / 10);
+        if (this.speedStep === 0) this.speedStep = step;
+        if (step > this.speedStep) {
+            this.speedStep = step;
+            this.hud.flashSpeed(step * 10);
+            vibrate(15);
+        }
+    }
+
+    /** "Road’s perfect!" — said with total confidence right before a pothole. */
     private overconfidentBanter(): void {
         const lines = this.mods.driver.lines.beforePothole;
         if (!lines || this.sim.state !== 'playing') return;
@@ -314,19 +339,19 @@ export class Play extends Phaser.Scene {
         const t = title(this, designWidth(this) / 2 + 120, 196, banner, 60, won ? '#ffd23f' : '#ffffff').setDepth(55).setScale(0.3);
         this.tweens.add({ targets: t, scale: 1, duration: 420, ease: 'Back.out' });
         if (won) {
-            this.world.say(['Super, saar! 👍', 'Full bottle finished!', 'Wah! Well done!'][Math.floor(Math.random() * 3)]);
+            this.world.say(['Nice, all done! 👍', 'Bottle finished!', 'Well done!'][Math.floor(Math.random() * 3)]);
             const colors = [0xffd23f, 0xff6b6b, 0x4fb3f5, 0x2fbf71, 0xffffff];
             for (let i = 0; i < 6; i++) {
                 this.time.delayedCall(i * 160, () => {
-                    const p = auto.toScreen({ x: -60 + Math.random() * 80, y: -190 });
+                    const p = auto.toScreen({ x: HEAD.x - 4 + Math.random() * 80, y: HEAD.y - 40 });
                     this.world.fx.burst(p.x, p.y, 14, { up: 420, spread: 360, color: colors[i % colors.length] });
                 });
             }
         } else if (result.outcome === 'spilledOut') {
-            this.world.say('Oh no, saar… next time!');
+            this.world.say('Oh no… next time!');
         } else {
-            this.world.say("We've reached, saar!");
-            const p = auto.toScreen({ x: -90, y: -205 });
+            this.world.say("We're here!");
+            const p = auto.toScreen({ x: HEAD.x - 34, y: HEAD.y - 55 });
             this.time.delayedCall(500, () => this.popText('So thirsty…', 0xffffff, p));
         }
         this.time.delayedCall(1900, () => {
@@ -497,7 +522,8 @@ export class Play extends Phaser.Scene {
         if (step === 'done') {
             this.hud.hideHint();
             const W = designWidth(this);
-            const btn = makeButton(this, W / 2 + 60, 330, 'START RIDE  🛺', () => this.finishTutorial(), {
+            const btn = makeButton(this, W / 2 + 60, 330, 'START RIDE', () => this.finishTutorial(), {
+                emoji: '🛺',
                 width: 330,
                 height: 82,
                 fontSize: 34,

@@ -13,33 +13,32 @@ Sip on smooth road, lower before bumps.
 - **Lose (spectacularly):** drink through a *massive pothole* and the passenger is launched
   through the roof. *Bro unlocked flight mode.*
 
-Before each ride, pick a **driver** and the **weather** (*Choose your ride* screen):
+Before each ride, pick a **driver** and the **ride type**: sunny, rainy or night (*Choose your ride* screen):
 
 | Driver | Behaviour |
 | --- | --- |
-| 🧘 Shankar (Careful) | Slows down before bumps, so hits are softer. Gentle brakes |
-| 😤 Raju (Impatient) | Faster; scooters cut in and he slams the brakes |
-| 😎 Manju (Overconfident) | Fastest, never slows, says *"Road super saar!"* right before potholes |
+| 🧘 Pothole Pandey (Careful) | Slows down before bumps, so hits are softer. Gentle brakes |
+| 😤 Turbo Tiwari (Impatient) | Faster; scooters cut in and he slams the brakes |
+| 😎 Bumper Babu (Overconfident) | Fastest, never slows, says *"Road’s perfect!"* right before potholes |
 
-| Weather | Effect |
+| Ride type | Effect |
 | --- | --- |
 | ☀️ Sunny | Clear road |
 | 🌧️ Rainy | Puddles partly hide potholes, more waterlogged roads, slippery braking (longer stop + skid), rain and spray |
 | 🌙 Night | Darkness; the headlight, street lamps, cabin light and reflective paint light the way |
 
-The auto speeds up from 6 to a capped 9 m/s over the ~40 s ride. Road blockers:
+Like Chrome's dinosaur game, after a short calm start the auto climbs hard: 18 km/h → ~54 km/h at 10 s → 80 km/h by ~14 s, then flat out for the rest of the ~38 s, 700 m ride (the HUD shows your speed and flashes "Speeding up!" every 5 km/h). Road blockers:
 
 | Blocker | What it does |
 | --- | --- |
 | Pothole | Front wheel dips and rebounds, then the rear follows |
-| Massive pothole | Rare (≈1 in 4 rides, at most one, never in the opening or tutorial), marked by a barricade, blinking lamp and ⚠ sign. Lowered bottle: a big bounce. Bottle up at the rebound: passenger ejected through the roof, ride over |
+| Massive pothole | On every ride, once, at a random point after the opening (sometimes right before your stop; never in the tutorial). Marked by a barricade, blinking lamp and ⚠ sign. Bottle down: you ride through it. Bottle up at the rebound: passenger ejected through the roof, ride over |
 | Speed breaker | Slow rolling rise, then a jolt as the auto comes down |
 | Waterlogged pothole | Looks the same every time, but its hidden depth varies from shallow to brutal |
 | Repair patch | Small vibrations: you can usually keep sipping |
 | Manhole | Small, sharp clank |
 | Rumble strip | Fast rattle: sippable at a small cost |
 | Metro-work gravel | Long, loose and rattly |
-| Cow crossing | Sudden brake: the passenger is thrown forward |
 | Scooter cut-in | Impatient driver only: a hard sudden brake |
 | Traffic signal | Full stop (free sip!), amber warning, then a lurch on green |
 
@@ -64,7 +63,7 @@ Handy URL parameters (work in production too):
 | ----------- | ------------------------------------------------ |
 | `?seed=123` | Replay an exact road layout (deterministic)      |
 | `?debug`    | Show the tuning/debug panel in a production build |
-| `?massive`  | Always put a massive pothole on the route (QA for the ejection) |
+| `?massive`  | Force a massive pothole onto the route (already the default; kept for QA links) |
 
 Reset the tutorial or best score by clearing `localStorage` keys `jos.settings.v1` / `jos.best.v1`.
 
@@ -146,7 +145,7 @@ src/
       spring.ts, rng.ts      damped spring, mulberry32 PRNG
     systems/
       input.ts               one-finger hold, multi-touch safe, cancel/blur handling
-      sound.ts               Web Audio synth (engine, rumble, bumps, splash, gulp, jingles)
+      sound.ts               Web Audio: recorded diesel engine loop + synth (rumble, bumps, splash, gulp, jingles)
       settings.ts            mute / reduced motion / haptics / tutorial flag + personal best
       haptics.ts             navigator.vibrate wrapper
       share.ts               1200×630 result card + Web Share API (WhatsApp-friendly)
@@ -199,14 +198,14 @@ the whole way usually loses.
 | Braking jolts (cows, signals)           | `tuning.ts` → `brake*`, `hazards.ts` → `brake`     |
 | Spill limit                             | `tuning.ts` → `spillLimitMl`                       |
 | Driver personalities                    | `config/drivers.ts`                                |
-| Weather                                 | `config/weather.ts`, visuals in `render/WeatherView.ts` |
+| Ride type (sunny / rainy / night)       | `config/weather.ts`, visuals in `render/WeatherView.ts` |
 | Drink rate, capacity                    | `tuning.ts` → `drinkRateMlPerSec`, `capacityMl`    |
 | Arm timings                             | `tuning.ts` → `raiseMs`, `lowerMs`                 |
 | Bounce / pitch                          | `tuning.ts` → `suspension*`, `kickBasePxPerSec`    |
 | How much bumps break alignment          | `tuning.ts` → `head*`, `hand*`, `alignTolerancePx` |
 | Spill amounts                           | `tuning.ts` → `sloshMlPerImpact`, `missSpillMlPerSec`, `spillSensitivity` |
 | Individual hazards                      | `hazards.ts`                                       |
-| Massive pothole rarity / run-up         | `difficulty.ts` → `MASSIVE_POTHOLE`                |
+| Massive pothole chance / position / run-up | `difficulty.ts` → `MASSIVE_POTHOLE`             |
 | Ejection threshold (how raised = launch) | `tuning.ts` → `ejectArmThreshold`                 |
 | Ejection animation timings              | `render/EjectionController.ts` → `EJECT_TIMING`    |
 | Difficulty curve                        | `difficulty.ts`                                    |
@@ -248,3 +247,12 @@ To use illustrated sprites:
 ## License
 
 MIT. Started from the official [Phaser Vite TypeScript template](https://github.com/phaserjs/template-vite-ts).
+
+## Audio
+
+The engine is a recorded diesel auto-rickshaw: `public/audio/engine-loop.m4a` (a seamless
+12 s loop cut from a steady running section, padded 0.25 s on each side so the loop points
+stay clean) and `engine-rev.m4a` (pull-away rev, played at ride start and on green lights).
+Source: "Diesel Autorickshaw Sound Effects.mp3" (supplied by the project owner). Loop points
+and mix levels are `ENGINE_LOOP` in `src/game/systems/sound.ts`. Every other sound is
+synthesised, and a synth engine plays until the recording has loaded (or if it can't).

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ROUTE_LAYOUT } from '../src/game/config/difficulty';
 import { cloneTuning } from '../src/game/config/tuning';
-import { BEGINNER_HAZARDS } from '../src/game/config/difficulty';
+import { BEGINNER_HAZARDS, SECTIONS } from '../src/game/config/difficulty';
 import { frontSpeed, generateRoute, minClearSec, requiredDrinkSec, Road, hazardProfile, travelSec } from '../src/game/core/road';
 
 const t = cloneTuning();
@@ -46,7 +46,7 @@ describe('Road generation', () => {
     it('only uses beginner hazards in the opening section', () => {
         for (const seed of SEEDS) {
             const r = generateRoute(seed, t);
-            const opening = r.hazards.filter((h) => (h.x - t.wheelbasePx) / r.lengthPx < 0.25);
+            const opening = r.hazards.filter((h) => (h.x - t.wheelbasePx) / r.lengthPx < SECTIONS[0].until);
             for (const h of opening) expect(BEGINNER_HAZARDS).toContain(h.type);
         }
     });
@@ -62,12 +62,12 @@ describe('Road generation', () => {
                 // classify by where the gap was chosen (end of the previous hazard)
                 const p = (prev.x + prev.width - t.wheelbasePx) / r.lengthPx;
                 if (cur.block === prev.block) {
-                    if (p >= 0.75) finalCombos++;
+                    if (p >= SECTIONS[1].until) finalCombos++;
                     continue;
                 }
                 const g = travelSec(t, prev.x + prev.width, cur.x);
-                if (p < 0.25) gaps.opening.push(g);
-                else if (p >= 0.75) gaps.final.push(g);
+                if (p < SECTIONS[0].until) gaps.opening.push(g);
+                else if (p >= SECTIONS[1].until) gaps.final.push(g);
             }
         }
         const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
@@ -91,5 +91,18 @@ describe('Road generation', () => {
             expect(hazardProfile(h, h.x - 1)).toBe(0);
             expect(hazardProfile(h, h.x + h.width + 1)).toBe(0);
         }
+    });
+});
+
+describe('No cows on the road', () => {
+    it('cow crossings never spawn, for any driver or weather', async () => {
+        const { DRIVER_IDS } = await import('../src/game/config/drivers');
+        const { WEATHER_IDS } = await import('../src/game/config/weather');
+        const { rideMods } = await import('../src/game/config/ride');
+        const t = cloneTuning();
+        for (const d of DRIVER_IDS)
+            for (const w of WEATHER_IDS)
+                for (let seed = 1; seed <= 40; seed++)
+                    expect(generateRoute(seed, t, rideMods(d, w)).hazards.some((h) => h.type === 'cow')).toBe(false);
     });
 });

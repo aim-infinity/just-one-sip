@@ -32,21 +32,21 @@ function peakBody(driver: 'careful' | 'impatient' | 'overconfident') {
 }
 
 describe('Driver personalities', () => {
-    it('careful Shankar slows for bumps, so hits are softer', () => {
+    it('careful Pothole Pandey slows for bumps, so hits are softer', () => {
         const careful = peakBody('careful');
         const over = peakBody('overconfident');
         expect(careful.peak).toBeLessThan(over.peak * 0.85);
         expect(careful.events.some((e) => e.kind === 'slowing')).toBe(true);
     });
 
-    it('overconfident Manju drives faster and never slows', () => {
+    it('overconfident Bumper Babu drives faster and never slows', () => {
         const over = new RideSimulation(t, new Road([], 1e9), { seed: 1, mods: rideMods('overconfident', 'sunny') });
         const careful = new RideSimulation(t, new Road([], 1e9), { seed: 1, mods: rideMods('careful', 'sunny') });
         expect(over.cruiseSpeed).toBeGreaterThan(careful.cruiseSpeed * 1.1);
         expect(peakBody('overconfident').events.some((e) => e.kind === 'slowing')).toBe(false);
     });
 
-    it('impatient Raju meets scooters cutting in, and brakes harder', () => {
+    it('impatient Turbo Tiwari meets scooters cutting in, and brakes harder', () => {
         let cutIns = 0;
         for (let s = 1; s <= 30; s++) cutIns += generateRoute(s, t, rideMods('impatient', 'sunny')).hazards.filter((h) => h.type === 'cutIn').length;
         expect(cutIns).toBeGreaterThan(10);

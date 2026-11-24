@@ -52,7 +52,7 @@ describe('Full-ride conservation', () => {
             steps++;
             expect(Math.abs(total(sim.bottle) - t.capacityMl)).toBeLessThan(1e-6);
         }
-        expect(sim.state).toBe('ended');
+        expect(sim.isOver).toBe(true); // ended normally or passenger ejected
     });
 
     it('upright bottle barely spills over a whole ride', () => {

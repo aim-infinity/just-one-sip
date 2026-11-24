@@ -58,15 +58,17 @@ body {
 
 #loading .spinner {
     font-size: 64px;
+    display: inline-block;
     animation: bob 0.6s ease-in-out infinite alternate;
 }
 
 @keyframes bob {
     from {
-        transform: translateY(0) rotate(-3deg);
+        /* scaleX(-1): the 🛺 emoji faces left on most platforms; the game drives right */
+        transform: translateY(0) rotate(-3deg) scaleX(-1);
     }
     to {
-        transform: translateY(-10px) rotate(3deg);
+        transform: translateY(-10px) rotate(3deg) scaleX(-1);
     }
 }
 

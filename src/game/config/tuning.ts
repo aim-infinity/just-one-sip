@@ -22,13 +22,13 @@ export const TUNING = {
     pxPerMeter: 100,
     /** Multiplies the whole speed curve (see SPEED_PROFILE below). 1 = default. */
     speedScale: 1,
-    /** Route length in metres. ≈40 s ride along SPEED_PROFILE. */
-    routeMeters: 290,
+    /** Route length in metres (keep ≤ 1000). ≈38 s ride along SPEED_PROFILE. */
+    routeMeters: 700,
 
     // ── Auto geometry ───────────────────────────────────────────────────
-    /** Distance between rear and front axles (px). The auto art is scaled to match (art is drawn at 190). */
-    wheelbasePx: 247,
-    wheelRadiusPx: 31,
+    /** Distance between rear and front axles (px). The auto art is scaled to match (ART_WHEELBASE in autoArt.ts). */
+    wheelbasePx: 352,
+    wheelRadiusPx: 21,
     /** Where the auto sits horizontally, as a fraction of screen width. */
     autoAnchorFraction: 0.24,
     /** Where the passenger's seat is along the wheelbase (0 = rear axle). */
@@ -132,14 +132,19 @@ export function cloneTuning(overrides: Partial<Tuning> = {}): Tuning {
 
 /**
  * Speed curve over the route: [progress 0..1, metres/second].
- * Capped at 9 m/s (≈32 km/h) — difficulty comes from timing, not runaway speed.
+ * A short calm start, then a hard Dino-style climb to 80 km/h and hold:
+ * 18 km/h at the start, ~27 km/h at 5 s, ~54 km/h at 10 s, 80 km/h by
+ * ~14 s, then flat out to the stop. Hazard gaps are in seconds, so they
+ * stretch with speed; what tightens is how long each hazard is on screen.
  */
 export const SPEED_PROFILE: [number, number][] = [
-    [0, 6],
-    [0.3, 6.6],
-    [0.7, 8],
-    [1, 9],
+    [0, 5],
+    [0.02, 5.5],
+    [0.19, 22.3],
+    [1, 22.3],
 ];
+/** Top of the speed curve (m/s), before driver/weather multipliers. */
+export const TOP_SPEED_MPS = SPEED_PROFILE[SPEED_PROFILE.length - 1][1];
 
 /** Speed (px/s) at a given route progress (0..1). */
 export function speedPxAt(t: Tuning, progress: number): number {

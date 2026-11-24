@@ -59,7 +59,7 @@ export class Home extends Phaser.Scene {
             .setDepth(40)
             .setLineSpacing(2);
 
-        makeButton(this, cx, 386, 'START RIDE  🛺', () => this.start(false), { width: 340, height: 86, fontSize: 38, depth: 40 });
+        makeButton(this, cx, 386, 'START RIDE', () => this.start(false), { width: 340, height: 86, fontSize: 38, depth: 40, emoji: '🛺' });
         makeButton(this, cx - 95, 486, 'How to play', () => this.start(true), {
             width: 210,
             height: 58,

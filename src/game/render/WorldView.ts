@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import type { RideSimulation, SimEvent } from '../core/simulation';
 import { settings } from '../systems/settings';
-import { AutoView, type Mood } from './AutoView';
+import { AutoView, HEAD, type Mood } from './AutoView';
+import { AUTO_POINTS, DRIVER_HEAD_POS } from './autoArt';
 import { ParallaxView } from './ParallaxView';
 import { RoadView } from './RoadView';
+import { SmokeFx } from './SmokeFx';
 import { SplashFx } from './SplashFx';
 import { WeatherView } from './WeatherView';
 import { FONT } from './palette';
@@ -54,13 +56,18 @@ export class WorldView {
     readonly road: RoadView;
     readonly auto: AutoView;
     readonly fx: SplashFx;
+    readonly smoke: SmokeFx;
     readonly mood = new MoodTracker();
     readonly weather: WeatherView;
     private bubble?: Phaser.GameObjects.Container;
     private bubbleT = 0;
     private sprayT = 0;
+    private dustT = 0;
     readonly autoX: number;
     private lastCamX = 0;
+    /** Speed streaks over the asphalt; they fade in as the auto gets fast. */
+    private streaks: Phaser.GameObjects.Graphics;
+    private streakPts: { x: number; y: number; k: number }[] = [];
 
     constructor(
         scene: Phaser.Scene,
@@ -72,7 +79,8 @@ export class WorldView {
         this.parallax = new ParallaxView(scene, width, wx);
         this.road = new RoadView(scene, sim.road, width, wx);
         if (wx.id === 'rainy') this.road.tint(0xb8c2cc);
-        this.auto = new AutoView(scene);
+        this.auto = new AutoView(scene, sim.mods.driver.id);
+        this.smoke = new SmokeFx(scene, settings.reducedMotion);
         this.fx = new SplashFx(scene, settings.reducedMotion);
         this.fx.floorY = GROUND_Y + 20;
         this.weather = new WeatherView(scene, width, wx, settings.reducedMotion);
@@ -80,6 +88,33 @@ export class WorldView {
         // destination sign stands just ahead of where the auto stops, so you can see it
         if (Number.isFinite(sim.lengthPx)) this.road.setFinish(sim.lengthPx + sim.t.wheelbasePx + 170);
         this.lastCamX = this.camX;
+        this.streaks = scene.add.graphics().setDepth(5.5);
+        const n = settings.reducedMotion ? 5 : 12;
+        for (let i = 0; i < n; i++) this.streakPts.push({ x: Math.random() * width, y: 0, k: 0 });
+        for (const p of this.streakPts) this.respawnStreak(p, Math.random() * width);
+    }
+
+    private respawnStreak(p: { x: number; y: number; k: number }, x: number): void {
+        p.x = x;
+        p.y = 536 + Math.random() * 76; // asphalt band
+        p.k = 0.6 + Math.random() * 0.8; // length / brightness variety
+    }
+
+    /** Streaks scroll a little faster than the road and stretch with speed (none below ~30 km/h). */
+    private updateStreaks(dt: number): void {
+        const g = this.streaks;
+        g.clear();
+        const v = this.sim.isOver ? 0 : this.sim.speed;
+        const kmh = (v / this.sim.t.pxPerMeter) * 3.6;
+        const a = Math.min(1, Math.max(0, (kmh - 30) / 40)) * (settings.reducedMotion ? 0.5 : 1);
+        for (const p of this.streakPts) {
+            p.x -= v * 1.15 * dt;
+            const len = (40 + v * 0.09) * p.k;
+            if (p.x + len < 0) this.respawnStreak(p, this.width + Math.random() * 200);
+            if (a <= 0) continue;
+            g.lineStyle(2 + p.k, 0xffffff, 0.22 * a * p.k);
+            g.lineBetween(p.x, p.y, p.x + len, p.y);
+        }
     }
 
     private scene: Phaser.Scene;
@@ -109,6 +144,17 @@ export class WorldView {
         this.bubble = undefined;
     }
 
+    /** Screen position of the diesel exhaust tip. */
+    tailpipe(): { x: number; y: number } {
+        return this.auto.toScreen(AUTO_POINTS.exhaust);
+    }
+
+    /** Dark puffs as the engine revs (ride start, green light). */
+    exhaustBurst(): void {
+        const p = this.tailpipe();
+        this.smoke.burst(p.x, p.y, this.sim.speed);
+    }
+
     get camX(): number {
         return this.sim.rearX - (this.autoX - this.sim.t.wheelbasePx / 2);
     }
@@ -126,6 +172,11 @@ export class WorldView {
                 const m = a.toScreen(a.mouthLocal);
                 this.fx.burst(m.x - 2, m.y + 4, 1, { up: 40, spread: 70, dir: -0.4 });
             }
+        } else if (e.kind === 'kick' && e.severity > 0.5 && e.hazard.type !== 'waterlogged') {
+            // tyre slams back down: a puff of road dust at the contact patch
+            const x = (e.wheel === 'rear' ? this.sim.rearX : this.sim.frontX) - this.camX;
+            const n = Math.round((settings.reducedMotion ? 3 : 7) * Math.min(1.6, e.severity));
+            this.fx.burst(x, GROUND_Y - 2, n, { up: 120 + e.severity * 90, spread: 220, color: 0xb9a888 });
         } else if (e.kind === 'contact' && e.hazard.type === 'waterlogged') {
             const x = (e.wheel === 'rear' ? this.sim.rearX : this.sim.frontX) - this.camX;
             this.fx.burst(x, GROUND_Y - 2, settings.reducedMotion ? 6 : 16, { up: 420, spread: 300, color: P.mud });
@@ -138,6 +189,7 @@ export class WorldView {
         this.lastCamX = camX;
         this.parallax.update(camX, dt, this.width);
         this.road.update(camX, this.sim, this.sim.time);
+        this.updateStreaks(dt);
         const { mood, blink } = this.mood.update(dt, this.sim);
         this.auto.update(this.sim, camX, {
             x: this.autoX,
@@ -146,6 +198,16 @@ export class WorldView {
             motionScale: settings.reducedMotion ? 0.45 : 1,
         }, dt);
         this.fx.update(dt, Math.min(scroll, this.sim.cruiseSpeed * 0.05));
+        this.smoke.update(dt, this.tailpipe(), this.sim.speed, !this.sim.isOver && this.sim.time > 0);
+
+        // road dust curling off the rear tyre once the auto is really moving
+        if (!settings.reducedMotion && !this.sim.isOver && this.sim.speed > 1100 && this.sim.mods.weather.id !== 'rainy') {
+            this.dustT -= dt;
+            if (this.dustT <= 0) {
+                this.dustT = 0.07 - Math.min(0.035, (this.sim.speed - 1100) / 30000);
+                this.fx.burst(this.sim.rearX - camX - 18, GROUND_Y - 3, 1, { up: 40, spread: 70, dir: -1.5, color: 0xc9b998 });
+            }
+        }
 
         // weather: spray off the rear wheel in the rain, lights at night
         const a = this.auto;
@@ -156,12 +218,21 @@ export class WorldView {
                 this.fx.burst(this.sim.rearX - camX - 20, GROUND_Y - 2, 2, { up: 140, spread: 60, dir: -1.2, color: 0xcfe0ee });
             }
         }
-        const lamp = a.toScreen({ x: 142, y: -36 });
-        this.weather.update(dt, camX, { x: lamp.x, y: lamp.y, rot: a.container.rotation }, a.toScreen({ x: -40, y: -120 }), this.road.lights());
+        const lamp = a.toScreen(AUTO_POINTS.headlamp);
+        const b = this.sim.brake;
+        const tail = a.toScreen(AUTO_POINTS.tailLamp);
+        this.weather.update(
+            dt,
+            camX,
+            { x: lamp.x, y: lamp.y, rot: a.container.rotation },
+            a.toScreen({ x: HEAD.x + 26, y: HEAD.y + 25 }),
+            this.road.lights(),
+            { ...tail, braking: b.active && b.phase !== 'recover' && !this.sim.isOver },
+        );
 
         // speech bubble follows the driver's head
         if (this.bubble) {
-            const p = a.toScreen({ x: 96, y: -200 });
+            const p = a.toScreen({ x: DRIVER_HEAD_POS.x + 14, y: DRIVER_HEAD_POS.y - 48 });
             this.bubble.setPosition(p.x + 40, p.y - 30);
             this.bubbleT -= dt;
             if (this.bubbleT < 0.25) this.bubble.setAlpha(Math.max(0, this.bubbleT / 0.25));

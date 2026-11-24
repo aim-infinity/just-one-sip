@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { AutoView } from './AutoView';
+import { HEAD, type AutoView } from './AutoView';
 import { AUTO_TEX, ROOF } from './autoArt';
 import { PALETTE as P } from './palette';
 import { TEX_SCALE } from './textures';
@@ -19,8 +19,8 @@ interface Frag {
     life: number;
 }
 
-/** Canopy top edge (art space): slopes from y −192 at x −134 down to −183 at x 112. */
-const roofTopAt = (x: number) => ROOF.top + (Math.max(-134, x) + 134) * (9 / 246);
+/** Canopy top edge (art space), sampled from the illustration. */
+const roofTopAt = (x: number) => ROOF.topAt(x);
 
 const easeOutBack = (t: number) => {
     const c = 1.9;
@@ -48,8 +48,8 @@ export class RoofBreakEffect {
         private scene: Phaser.Scene,
         private auto: AutoView,
         /** The hole, centred over the passenger's head (art space x). */
-        readonly gapX0 = -118,
-        readonly gapX1 = -54,
+        readonly gapX0 = HEAD.x - 32,
+        readonly gapX1 = HEAD.x + 32,
     ) {
         this.g = scene.add.graphics();
         const c = auto.container;

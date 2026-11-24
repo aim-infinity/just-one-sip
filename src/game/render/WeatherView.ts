@@ -35,6 +35,13 @@ export class WeatherView {
     private beamStamp?: Phaser.GameObjects.Image;
     private lampGlows: Phaser.GameObjects.Image[] = [];
     private beamGlow?: Phaser.GameObjects.Image;
+    private fadeStamp?: Phaser.GameObjects.Image;
+    /** Warm sodium light the lamps cast on the road and the shopfronts. */
+    private lampPools: Phaser.GameObjects.Image[] = [];
+    private lampSpill: Phaser.GameObjects.Image[] = [];
+    private headHalo?: Phaser.GameObjects.Image;
+    private tailGlow?: Phaser.GameObjects.Image;
+    private cabinTint?: Phaser.GameObjects.Image;
     onThunder?: () => void;
 
     constructor(
@@ -61,6 +68,16 @@ export class WeatherView {
                 this.lampGlows.push(scene.add.image(0, 0, 'glow').setDepth(21).setTint(0xffd27a).setAlpha(0.55).setScale(TEX_SCALE * 0.45).setBlendMode(Phaser.BlendModes.ADD));
             }
             this.beamGlow = scene.add.image(0, 0, 'beam').setOrigin(0, 0.5).setDepth(21).setTint(0xfff1b0).setAlpha(0.16).setBlendMode(Phaser.BlendModes.ADD);
+            this.fadeStamp = scene.make.image({ key: 'fadeV', add: false }).setOrigin(0, 0);
+            const add = (tint: number, alpha: number) =>
+                scene.add.image(0, 0, 'glow').setDepth(21).setTint(tint).setAlpha(alpha).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
+            for (let i = 0; i < 4; i++) {
+                this.lampPools.push(add(0xffa640, 0.3));
+                this.lampSpill.push(add(0xffb75a, 0.14));
+            }
+            this.headHalo = add(0xfff4c0, 0.75).setVisible(true);
+            this.tailGlow = add(0xff2a1a, 0.4).setVisible(true);
+            this.cabinTint = add(0xffd59a, 0.16).setVisible(true);
         }
     }
 
@@ -75,9 +92,16 @@ export class WeatherView {
         return xs;
     }
 
-    update(dt: number, camX: number, headlamp: { x: number; y: number; rot: number }, cabin: { x: number; y: number }, lights: Light[]): void {
+    update(
+        dt: number,
+        camX: number,
+        headlamp: { x: number; y: number; rot: number },
+        cabin: { x: number; y: number },
+        lights: Light[],
+        tail?: { x: number; y: number; braking: boolean },
+    ): void {
         if (this.rain) this.updateRain(dt, camX);
-        if (this.dark) this.updateNight(camX, headlamp, cabin, lights);
+        if (this.dark) this.updateNight(camX, headlamp, cabin, lights, tail);
     }
 
     private updateRain(dt: number, camX: number): void {
@@ -113,13 +137,22 @@ export class WeatherView {
         }
     }
 
-    private updateNight(camX: number, lamp: { x: number; y: number; rot: number }, cabin: { x: number; y: number }, lights: Light[]): void {
+    private updateNight(
+        camX: number,
+        lamp: { x: number; y: number; rot: number },
+        cabin: { x: number; y: number },
+        lights: Light[],
+        tail?: { x: number; y: number; braking: boolean },
+    ): void {
         const rt = this.dark!;
         const glow = this.glowStamp!;
         const beam = this.beamStamp!;
         const Y = (y: number) => y - DARK_TOP;
         rt.clear();
-        rt.fill(0x060a1c, 0.82);
+        rt.fill(0x070c22, 0.78);
+        // feather the top edge into the night sky (no hard seam above the buildings)
+        this.fadeStamp!.setPosition(0, 0).setDisplaySize(this.width, 110).setAlpha(1);
+        rt.erase(this.fadeStamp!);
         // headlight cone
         beam.setPosition(lamp.x, Y(lamp.y + 4)).setRotation(lamp.rot + 0.13).setScale(TEX_SCALE * 1.1, TEX_SCALE * 0.75).setAlpha(1);
         rt.erase(beam);
@@ -137,6 +170,23 @@ export class WeatherView {
             g.setVisible(x !== undefined);
             if (x !== undefined) g.setPosition(x, 308);
         });
+        // warm sodium-orange light on the road and the shopfront under each lamp
+        this.lampPools.forEach((g, i) => {
+            const x = xs[i];
+            g.setVisible(x !== undefined);
+            if (x !== undefined) g.setPosition(x - 10, GROUND_Y - 6).setScale(TEX_SCALE * 1.8, TEX_SCALE * 0.75);
+        });
+        this.lampSpill.forEach((g, i) => {
+            const x = xs[i];
+            g.setVisible(x !== undefined);
+            if (x !== undefined) g.setPosition(x - 6, 420).setScale(TEX_SCALE * 1.2, TEX_SCALE * 1.4);
+        });
+        // the auto's own lights: glowing headlamp lens, tail lamp (brighter on the brakes), cabin bulb
+        this.headHalo!.setPosition(lamp.x, lamp.y).setScale(TEX_SCALE * 0.22);
+        if (tail) {
+            this.tailGlow!.setVisible(true).setPosition(tail.x, tail.y).setScale(TEX_SCALE * (tail.braking ? 0.34 : 0.2)).setAlpha(tail.braking ? 0.85 : 0.4);
+        }
+        this.cabinTint!.setPosition(cabin.x, cabin.y).setScale(TEX_SCALE * 1.1, TEX_SCALE * 1);
         for (const x of xs) {
             glow.setAlpha(1).setPosition(x, Y(308)).setScale(TEX_SCALE * 0.5);
             rt.erase(glow);

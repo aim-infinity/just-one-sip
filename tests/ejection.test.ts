@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { MASSIVE_POTHOLE } from '../src/game/config/difficulty';
+import { DRIVER_IDS } from '../src/game/config/drivers';
 import { HAZARDS } from '../src/game/config/hazards';
+import { rideMods } from '../src/game/config/ride';
+import { WEATHER_IDS } from '../src/game/config/weather';
 import { cloneTuning, progressAtFront } from '../src/game/config/tuning';
-import { frontSpeed, generateRoute, planMassive, Road, type Hazard } from '../src/game/core/road';
+import { frontSpeed, generateRoute, Road, type Hazard } from '../src/game/core/road';
 import { PASSENGER_EJECTED, RideSimulation, type SimEvent } from '../src/game/core/simulation';
 import { headline } from '../src/game/core/scoring';
 
@@ -89,43 +92,47 @@ describe('Massive pothole: passenger ejection', () => {
 });
 
 describe('Massive pothole: placement', () => {
-    it('is rare: roughly MASSIVE_POTHOLE.chance of rides', () => {
-        let n = 0;
-        for (let s = 1; s <= 2000; s++) if (planMassive(s) !== null) n++;
-        expect(n / 2000).toBeGreaterThan(MASSIVE_POTHOLE.chance - 0.05);
-        expect(n / 2000).toBeLessThan(MASSIVE_POTHOLE.chance + 0.05);
-    });
-
-    it('appears at most once, outside the opening, with a clear run-up', () => {
-        for (let seed = 1; seed <= 60; seed++) {
-            const r = generateRoute(seed * 97, t, undefined, { massive: 'always' });
-            const idx = r.hazards.map((h, i) => (h.type === 'massivePothole' ? i : -1)).filter((i) => i >= 0);
-            expect(idx).toHaveLength(1);
-            const h = r.hazards[idx[0]];
-            const p = progressAtFront(t, h.x);
-            expect(p).toBeGreaterThanOrEqual(MASSIVE_POTHOLE.window[0]);
-            expect(p).toBeLessThan(0.95);
-            const prev = r.hazards[idx[0] - 1];
-            if (prev) {
-                const gapSec = (h.x - (prev.x + prev.width)) / frontSpeed(t, prev.x + prev.width);
-                expect(gapSec).toBeGreaterThanOrEqual(MASSIVE_POTHOLE.leadSec - 0.15);
+    it('appears exactly once on every ride, for every driver × weather, with a clear run-up before the stop', () => {
+        for (const d of DRIVER_IDS)
+            for (const w of WEATHER_IDS) {
+                const mods = rideMods(d, w);
+                for (let seed = 1; seed <= 60; seed++) {
+                    const r = generateRoute(seed * 97, t, mods);
+                    const idx = r.hazards.map((h, i) => (h.type === 'massivePothole' ? i : -1)).filter((i) => i >= 0);
+                    expect(idx, `${d}/${w}/${seed}`).toHaveLength(1);
+                    const h = r.hazards[idx[0]];
+                    expect(progressAtFront(t, h.x)).toBeGreaterThanOrEqual(MASSIVE_POTHOLE.window[0]);
+                    // fully on the road before the stop
+                    expect(h.x + h.width).toBeLessThan(r.lengthPx + t.wheelbasePx);
+                    const prev = r.hazards[idx[0] - 1];
+                    if (prev) {
+                        const gapSec = (h.x - (prev.x + prev.width)) / frontSpeed(t, prev.x + prev.width, mods.speedMul);
+                        expect(gapSec, `${d}/${w}/${seed}`).toBeGreaterThanOrEqual(MASSIVE_POTHOLE.leadSec - 0.15);
+                    }
+                }
             }
-        }
     });
 
-    it("never appears with massive: 'never', and rides without one keep their old layout", () => {
+    it('lands at a random point: spread across the route, sometimes right near the end', () => {
+        const ps: number[] = [];
+        for (let seed = 1; seed <= 300; seed++) {
+            const h = generateRoute(seed, t).hazards.find((x) => x.type === 'massivePothole')!;
+            ps.push(progressAtFront(t, h.x));
+        }
+        expect(Math.min(...ps)).toBeLessThan(0.45);
+        expect(Math.max(...ps)).toBeGreaterThan(0.85);
+    });
+
+    it("never appears with massive: 'never'", () => {
         for (let seed = 1; seed <= 40; seed++) {
-            const never = generateRoute(seed, t, undefined, { massive: 'never' });
-            expect(never.hazards.some((h) => h.type === 'massivePothole')).toBe(false);
-            const normal = generateRoute(seed, t);
-            if (!normal.hazards.some((h) => h.type === 'massivePothole')) expect(normal.hazards).toEqual(never.hazards);
+            expect(generateRoute(seed, t, undefined, { massive: 'never' }).hazards.some((h) => h.type === 'massivePothole')).toBe(false);
         }
     });
 
     it('a well-timed player never gets ejected', () => {
         let ejections = 0;
         for (let seed = 1; seed <= 30; seed++) {
-            const r = generateRoute(seed * 31, t, undefined, { massive: 'always' });
+            const r = generateRoute(seed * 31, t);
             const sim = new RideSimulation(t, new Road(r.hazards, r.lengthPx), { seed });
             while (sim.state === 'playing') {
                 const next = sim.timeToNextHazard().sec;

@@ -35,7 +35,7 @@ export interface DriverProfile {
 export const DRIVERS: Record<DriverId, DriverProfile> = {
     careful: {
         id: 'careful',
-        name: 'Shankar',
+        name: 'Pothole Pandey',
         trait: 'Careful',
         blurb: 'Slows down for every bump. Softer hits, longer ride.',
         emoji: '🧘',
@@ -45,14 +45,14 @@ export const DRIVERS: Record<DriverId, DriverProfile> = {
         brakeJoltMul: 0.75,
         extraWeights: {},
         lines: {
-            start: ['Sit properly saar, I will go slowly.', 'No hurry saar, safe ride.'],
-            slowing: ['Slowly, slowly…', 'Bump coming, hold on saar.', 'Careful, careful…'],
-            braking: ['Wait, wait…'],
+            start: ['Sit back, I’ll take it easy.', 'No rush. We’ll get there.'],
+            slowing: ['Easy now…', 'Bump ahead, hold on.', 'Careful…'],
+            braking: ['Hold on…'],
         },
     },
     impatient: {
         id: 'impatient',
-        name: 'Raju',
+        name: 'Turbo Tiwari',
         trait: 'Impatient',
         blurb: 'In a hurry. Slams the brakes when bikes cut in.',
         emoji: '😤',
@@ -62,13 +62,13 @@ export const DRIVERS: Record<DriverId, DriverProfile> = {
         brakeJoltMul: 1.35,
         extraWeights: { cutIn: 2.5 },
         lines: {
-            start: ['Fast-fast, I have next ride saar!', 'Hold tight, shortcut route.'],
-            braking: ['Whoa! Where are you going?!', 'Saar, these bikers!', 'No indicator?!', 'Come on, come on…'],
+            start: ['Hold tight, I know a shortcut.', 'Let’s go, I’ve got another ride after this.'],
+            braking: ['Whoa!', 'Watch it!', 'No signal?!', 'Come on…'],
         },
     },
     overconfident: {
         id: 'overconfident',
-        name: 'Manju',
+        name: 'Bumper Babu',
         trait: 'Overconfident',
         blurb: 'Fastest driver in the city (he says). Never slows down.',
         emoji: '😎',
@@ -78,9 +78,9 @@ export const DRIVERS: Record<DriverId, DriverProfile> = {
         brakeJoltMul: 1.1,
         extraWeights: {},
         lines: {
-            start: ['Road super saar! Full smooth.', 'Ten minutes, guaranteed!'],
-            beforePothole: ['Road super saar!', 'Full smooth, don’t worry!', 'No pothole, nothing saar!', 'Trust me saar!'],
-            braking: ['No problem, no problem!'],
+            start: ['Smooth road today, trust me.', 'Ten minutes, guaranteed!'],
+            beforePothole: ['Road’s perfect!', 'Smooth all the way!', 'Not a bump in sight!', 'Trust me!'],
+            braking: ['No problem!'],
         },
     },
 };

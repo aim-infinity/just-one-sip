@@ -36,10 +36,11 @@ export class Results extends Phaser.Scene {
         const root = this.add.container(0, 0);
         root.add(panel(this, cx, H / 2 + 14, 860, 640, won ? 0xfff3c4 : P.cream));
 
-        // a "photo" of how the ride ended, pinned to the corner of the card
+        // 1 · What happened — headline + verdict, centred on the card.
+        // The end-shot polaroid is a corner sticker so it never pushes the column off-centre.
         const hasShot = this.textures.exists('endshot');
         if (hasShot) {
-            const ph = this.add.container(cx - 340, 132).setAngle(-6);
+            const ph = this.add.container(cx - 392, 96).setAngle(-8).setScale(0.68);
             const frame = this.add.graphics();
             frame.fillStyle(P.ink, 0.3);
             frame.fillRect(-104, -74, 216, 166);
@@ -53,63 +54,71 @@ export class Results extends Phaser.Scene {
             ph.add([frame, img, tape]);
             root.add(ph);
         }
-        const head = title(this, hasShot ? cx + 70 : cx, 104, hasShot ? headline(r) : `${won ? '🎉' : '😩'}  ${headline(r)}`, 54, won ? '#ffd23f' : '#ffffff');
-        root.add(head);
+        root.add(title(this, cx, 104, hasShot ? headline(r) : `${won ? '🎉' : '😩'}  ${headline(r)}`, 50, won ? '#ffd23f' : '#ffffff'));
+        root.add(label(this, cx, 154, `“${verdict(r)}”`, 24, '#6b5b4b', 'italic 800').setWordWrapWidth(600));
 
+        // 2 · How did I do — stars + score are one hero unit, with the gap to the best.
         const s = stars(r);
-        const starText = this.add.text(cx, 160, '★★★'.slice(0, s) + '☆☆☆'.slice(0, 3 - s), {
+        const starText = this.add.text(cx, 202, '★★★'.slice(0, s) + '☆☆☆'.slice(0, 3 - s), {
             fontFamily: FONT,
-            fontSize: '40px',
+            fontSize: '34px',
             color: '#f5a623',
             stroke: P.inkCss,
             strokeThickness: 5,
         });
         starText.setOrigin(0.5);
         root.add(starText);
+        root.add(label(this, cx, 256, score.toLocaleString(), 72, P.inkCss));
 
-        if (data.driver && data.weather) {
-            const d = DRIVERS[data.driver];
-            const w = WEATHER[data.weather];
-            starText.x = cx - 170;
-            root.add(label(this, cx + 110, 160, `${d.emoji} ${d.name} · ${w.emoji} ${w.label}`, 22, '#6b5b4b'));
-        }
-        root.add(label(this, hasShot ? cx + 70 : cx, 210, `“${verdict(r)}”`, 28, P.inkCss, 'italic 800').setWordWrapWidth(hasShot ? 620 : 780));
-
-        // stat cards
-        const stats: [string, string, string][] = [
-            ['DRUNK', `${Math.floor(r.consumedMl)} ml`, '#1f6fd0'],
-            ['SPILLED', `${Math.round(r.spilledMl)} ml`, '#c0392b'],
-            ['DISTANCE', `${Math.round(r.distanceM)} m`, P.inkCss],
-        ];
-        stats.forEach(([k, v, col], i) => {
-            const x = cx + (i - 1) * 250;
-            const g = this.add.graphics();
-            g.fillStyle(0xffffff, 1);
-            g.fillRoundedRect(x - 110, 246, 220, 108, 18);
-            g.lineStyle(3, P.ink, 1);
-            g.strokeRoundedRect(x - 110, 246, 220, 108, 18);
-            root.add(g);
-            root.add(label(this, x, 274, k, 20, '#6b5b4b'));
-            root.add(label(this, x, 318, v, 42, col));
-        });
-
-        const need = won ? '' : r.outcome === 'ejected' ? '   ·   Left via the roof' : r.outcome === 'spilledOut' ? '   ·   Every drop went on the floor' : `   ·   ${Math.round(r.remainingMl)} ml still in the bottle`;
-        root.add(label(this, cx, 386, `Score ${score.toLocaleString()}${need}`, 28));
-        const bestLine = isNewBest ? '🏆 NEW PERSONAL BEST!' : `Personal best: ${best.score.toLocaleString()}`;
-        const bestText = label(this, cx, 422, bestLine, 24, isNewBest ? '#e67e22' : '#6b5b4b');
+        const gap = best.score - score;
+        const bestLine = isNewBest
+            ? '🏆 NEW PERSONAL BEST!'
+            : gap <= 0
+              ? `Matched your best · ${best.score.toLocaleString()}`
+              : `Best ${best.score.toLocaleString()}  ·  ${gap.toLocaleString()} to beat`;
+        const bestText = label(this, cx, 308, bestLine, isNewBest ? 24 : 20, isNewBest ? '#e67e22' : '#6b5b4b');
         root.add(bestText);
         if (isNewBest) this.tweens.add({ targets: bestText, scale: 1.12, yoyo: true, repeat: -1, duration: 500 });
 
-        const again = makeButton(this, cx, 508, 'TRY AGAIN', () => this.retry(), { width: 360, height: 90, fontSize: 40 });
-        root.add(again);
-        const share = makeButton(this, cx - 190, 614, 'Share 📤', () => this.share(r), {
-            width: 230,
-            height: 64,
-            fontSize: 26,
-            fill: 0x25d366,
-            textColor: '#ffffff',
+        // 3 · Why — compact breakdown chips, value first, label under.
+        const stats: [string, string, string][] = [
+            ['drunk', `${Math.floor(r.consumedMl)} ml`, '#1f6fd0'],
+            ['spilled', `${Math.round(r.spilledMl)} ml`, '#c0392b'],
+            ['distance', `${Math.round(r.distanceM)} m`, P.inkCss],
+        ];
+        stats.forEach(([k, v, col], i) => {
+            const x = cx + (i - 1) * 190;
+            const g = this.add.graphics();
+            g.fillStyle(0xffffff, 1);
+            g.fillRoundedRect(x - 85, 340, 170, 76, 16);
+            g.lineStyle(3, P.ink, 1);
+            g.strokeRoundedRect(x - 85, 340, 170, 76, 16);
+            root.add(g);
+            root.add(label(this, x, 368, v, 32, col));
+            root.add(label(this, x, 400, k, 16, '#6b5b4b'));
         });
-        const home = makeButton(this, cx + 190, 614, 'Home', () => this.home(), { width: 230, height: 64, fontSize: 26, fill: P.cream });
+
+        // 4 · Context — small, muted.
+        const meta: string[] = [];
+        if (data.driver && data.weather) {
+            const d = DRIVERS[data.driver];
+            const w = WEATHER[data.weather];
+            meta.push(`${d.emoji} ${d.name}`, `${w.emoji} ${w.label}`);
+        }
+        if (!won && r.outcome !== 'ejected' && r.outcome !== 'spilledOut') meta.push(`${Math.round(r.remainingMl)} ml left in the bottle`);
+        if (meta.length) root.add(label(this, cx, 446, meta.join('  ·  '), 18, '#6b5b4b'));
+
+        // 5 · What next — one primary CTA; Share and Home are secondary and share its edges.
+        const again = makeButton(this, cx, 516, 'TRY AGAIN', () => this.retry(), { width: 560, height: 84, fontSize: 40 });
+        root.add(again);
+        const share = makeButton(this, cx - 144, 614, 'Share 📤', () => this.share(r), {
+            width: 272,
+            height: 60,
+            fontSize: 24,
+            fill: 0xffffff,
+            textColor: '#1a9e4b',
+        });
+        const home = makeButton(this, cx + 144, 614, 'Home', () => this.home(), { width: 272, height: 60, fontSize: 24, fill: P.cream });
         root.add([share, home]);
 
         root.setScale(0.9).setAlpha(0);

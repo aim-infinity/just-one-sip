@@ -88,13 +88,16 @@ export const HAZARDS: Record<HazardType, HazardDef> = {
     },
     massivePothole: {
         type: 'massivePothole',
-        // A crater, not a pothole. Rare (max one per ride, placed by
+        // A crater, not a pothole. Exactly one per ride (placed by
         // MASSIVE_POTHOLE in difficulty.ts, never from section weights) and
         // drawn with barricades so it's unmistakable. Drinking through its
         // rebound launches the passenger through the roof (see simulation.ts).
+        // Its punishment is ejection: since it's on every ride, surviving it
+        // hits like a normal pothole (kick strength); the much deeper profile
+        // still makes the wheel visibly drop further.
         widthPx: [150, 175],
-        depthPx: [30, 36],
-        impact: [1.3, 1.4],
+        depthPx: [22, 26],
+        impact: [1.0, 1.1],
         minSpacingSec: 1.4,
         difficulty: 3,
         shape: 'dip',

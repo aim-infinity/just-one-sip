@@ -4,6 +4,7 @@ import { WEATHER, WEATHER_IDS, type WeatherId } from '../config/weather';
 import { FONT, PALETTE as P } from '../render/palette';
 import { SAFE, designWidth, setupCamera } from '../render/resolution';
 import { TEX_SCALE } from '../render/textures';
+import { DRIVER_HEAD_ORIGIN_Y, driverHeadKey } from '../render/autoArt';
 import { label, makeButton, title } from '../render/ui';
 import { saveSettings, settings } from '../systems/settings';
 import { sound } from '../systems/sound';
@@ -52,25 +53,34 @@ export class Setup extends Phaser.Scene {
             const x = W / 2 + (i - 1) * (cw + 24);
             const y = 262;
             const c: Choice = { root: this.add.container(x, y), bg: this.add.graphics(), w: cw, h: 220 };
-            const head = this.add.image(-cw / 2 + 52, -52, 'driverHead').setScale(TEX_SCALE * 1.9);
+            // portrait bust: khaki shoulders under the head, so the collar sits on a shirt
+            const hx = -cw / 2 + 50;
+            const bust = this.add.graphics();
+            bust.fillStyle(0xb9a36b, 1);
+            bust.fillRoundedRect(hx - 30, -30, 62, 22, { tl: 18, tr: 18, bl: 4, br: 4 });
+            bust.lineStyle(3, P.ink, 1);
+            bust.strokeRoundedRect(hx - 30, -30, 62, 22, { tl: 18, tr: 18, bl: 4, br: 4 });
+            const head = this.add.image(hx, -66, driverHeadKey(id)).setOrigin(0.5, DRIVER_HEAD_ORIGIN_Y).setScale(TEX_SCALE * 0.88);
             const name = this.add.text(-cw / 2 + 96, -78, `${d.name} ${d.emoji}`, { fontFamily: FONT, fontSize: '28px', color: P.inkCss, fontStyle: '800' });
+            // longer names ("Pothole Pandey") shrink to fit the card
+            for (let fs = 27; name.width > cw - 108 && fs >= 18; fs--) name.setFontSize(fs);
             const trait = this.add.text(-cw / 2 + 96, -44, d.trait.toUpperCase(), { fontFamily: FONT, fontSize: '18px', color: '#b85c00', fontStyle: '800' });
-            const blurb = this.add.text(-cw / 2 + 18, 0, d.blurb, { fontFamily: FONT, fontSize: '18px', color: '#4a3a2c', fontStyle: '600', wordWrap: { width: cw - 36 } });
-            const quote = this.add.text(-cw / 2 + 18, 58, `“${d.lines.start[0]}”`, {
+            const blurb = this.add.text(-cw / 2 + 18, 6, d.blurb, { fontFamily: FONT, fontSize: '18px', color: '#4a3a2c', fontStyle: '600', wordWrap: { width: cw - 36 } });
+            const quote = this.add.text(-cw / 2 + 18, 62, `“${d.lines.start[0]}”`, {
                 fontFamily: FONT,
                 fontSize: '17px',
                 color: '#6b5b4b',
                 fontStyle: 'italic 600',
                 wordWrap: { width: cw - 36 },
             });
-            c.root.add([c.bg, head, name, trait, blurb, quote]);
+            c.root.add([c.bg, bust, head, name, trait, blurb, quote]);
             c.root.setSize(cw, 220).setInteractive({ useHandCursor: true });
             c.root.on('pointerup', () => this.pickDriver(id, drivers));
             drivers[id] = c;
         });
 
         // ── weather ──
-        label(this, W / 2, 404, 'Weather', 26, P.inkCss);
+        label(this, W / 2, 404, 'Ride type', 26, P.inkCss);
         const ww = Math.min(300, (W - 120) / 3);
         const weathers: Record<string, Choice> = {};
         WEATHER_IDS.forEach((id, i) => {
@@ -90,7 +100,7 @@ export class Setup extends Phaser.Scene {
         this.pickDriver(settings.driver, drivers, true);
         this.pickWeather(settings.weather, weathers, true);
 
-        makeButton(this, W / 2, 640, 'START RIDE  🛺', () => this.go(), { width: 360, height: 84, fontSize: 36 });
+        makeButton(this, W / 2, 640, 'START RIDE', () => this.go(), { width: 360, height: 84, fontSize: 36, emoji: '🛺' });
         this.input.keyboard?.once('keydown-ENTER', () => this.go());
     }
 

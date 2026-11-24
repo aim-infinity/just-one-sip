@@ -314,7 +314,9 @@ function drawSignal(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, h: Haza
 
 function drawCutIn(scene: Phaser.Scene, h: Hazard, root: Phaser.GameObjects.Container): HazardView['update'] {
     // A scooter waits in the next lane, then swerves in front of the auto and zooms off.
-    const sc = scene.add.image(h.width - 40, NEAR + 18, 'scooter').setOrigin(0.5, 1).setScale(TEX_SCALE);
+    // Drawn at a believable size next to the auto (the raw texture reads as a toy).
+    const S = 1.75;
+    const sc = scene.add.image(h.width - 40, NEAR + 18, 'scooter').setOrigin(0.5, 1).setScale(TEX_SCALE * S);
     const lines = scene.add.graphics();
     root.add([lines, sc]);
     return (sim: RideSimulation, time: number) => {
@@ -327,7 +329,7 @@ function drawCutIn(scene: Phaser.Scene, h: Hazard, root: Phaser.GameObjects.Cont
         lines.clear();
         if (k > 0.05 && k < 1) {
             lines.lineStyle(3, 0xffffff, 0.7);
-            for (let i = 0; i < 3; i++) lines.lineBetween(sc.x - 70 - i * 14, sc.y - 20 - i * 14, sc.x - 110 - i * 14, sc.y - 20 - i * 14);
+            for (let i = 0; i < 3; i++) lines.lineBetween(sc.x - (70 + i * 14) * S, sc.y - (20 + i * 14) * S, sc.x - (110 + i * 14) * S, sc.y - (20 + i * 14) * S);
         }
     };
 }
@@ -376,9 +378,9 @@ function drawMassivePothole(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics,
     g.fillStyle(0x0d0e10, 1);
     g.fillEllipse(w / 2, G + 17, w + 34, 38);
     // cross-section: deep, steep and dark
-    bowl(g, h, 0x0b0c0e, 1.75);
+    bowl(g, h, 0x0b0c0e, 2.4);
     // muddy water glinting at the bottom
-    const bottom = G + h.depth * 1.75;
+    const bottom = G + h.depth * 2.4;
     g.fillStyle(0x3b3a34, 1);
     g.fillEllipse(w / 2, bottom - 7, w * 0.55, 10);
     g.lineStyle(2, 0x8fa9bd, 0.8);

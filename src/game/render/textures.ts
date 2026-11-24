@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { Rng } from '../core/rng';
 import { PALETTE as P } from './palette';
-import { AUTO_TEX, COW_TEX, SCOOTER_TEX, drawAutoBack, drawAutoFront, drawAutoRoof, drawDriverHead, drawScooter, drawWheel, drawZebu } from './autoArt';
+import { DRIVER_IDS } from '../config/drivers';
+import { ART_WHEELBASE, ART_WHEEL_R, AUTO_TEX, COW_TEX, DRIVER_HEAD_POS, SCOOTER_TEX, drawAutoBack, drawAutoDriver, drawAutoFront, drawAutoRoof, drawDriverHead, driverHeadKey, DRIVER_HEAD_TEX, drawScooter, drawWheel, drawWheelBlur, drawZebu } from './autoArt';
 import { RS } from './resolution';
 
 /**
@@ -330,8 +331,9 @@ function drawRoad(c: Ctx, W: number) {
     // far footpath
     c.fillStyle = '#cdbd9c';
     c.fillRect(0, 0, W, 26);
+    // long slabs: short repeats strobe ("wagon-wheel") at high scroll speed
     c.fillStyle = 'rgba(0,0,0,0.12)';
-    for (let x = 0; x < W; x += 32) c.fillRect(x, 0, 2, 26);
+    for (let x = 0; x < W; x += 128) c.fillRect(x, 0, 2, 26);
     c.fillRect(0, 12, W, 2);
     c.fillStyle = '#8d8d8d';
     c.fillRect(0, 24, W, 6);
@@ -348,16 +350,17 @@ function drawRoad(c: Ctx, W: number) {
     // lane dashes
     c.fillStyle = '#efe9d6';
     for (let x = 30; x < W; x += 256) c.fillRect(x, 92, 90, 6);
-    // near curb (yellow/black)
-    for (let x = 0; x < W; x += 32) {
-        c.fillStyle = (x / 32) % 2 === 0 ? '#ffc928' : '#2b2b2b';
-        c.fillRect(x, 116, 32, 12);
+    // near curb (yellow/black), painted in long 128 px blocks so it still reads
+    // as forward motion at 80 km/h instead of strobing backwards
+    for (let x = 0; x < W; x += 128) {
+        c.fillStyle = (x / 128) % 2 === 0 ? '#ffc928' : '#2b2b2b';
+        c.fillRect(x, 116, 128, 12);
     }
     // near footpath
     c.fillStyle = '#d9c9a7';
     c.fillRect(0, 128, W, 92);
     c.fillStyle = 'rgba(0,0,0,0.1)';
-    for (let x = 0; x < W; x += 64) c.fillRect(x, 128, 3, 92);
+    for (let x = 0; x < W; x += 256) c.fillRect(x, 128, 3, 92);
     for (let y = 160; y < 220; y += 32) c.fillRect(0, y, W, 3);
     c.fillStyle = 'rgba(0,0,0,0.18)';
     c.fillRect(0, 128, W, 4);
@@ -409,12 +412,22 @@ export function makeTextures(scene: Phaser.Scene): void {
     canvasTex(scene, 'props', 2040, 210 + TILE_PAD, padded((c) => drawProps(c, 2040, 210)));
     canvasTex(scene, 'road', 512, 220, (c) => drawRoad(c, 512));
     canvasTex(scene, 'wheel', 64, 64, drawWheel);
+    canvasTex(scene, 'wheelBlur', 64, 64, drawWheelBlur);
     canvasTex(scene, 'autoBack', AUTO_TEX.w, AUTO_TEX.h, drawAutoBack);
     canvasTex(scene, 'autoRoof', AUTO_TEX.w, AUTO_TEX.h, drawAutoRoof);
+    canvasTex(scene, 'autoDriver', AUTO_TEX.w, AUTO_TEX.h, drawAutoDriver);
     canvasTex(scene, 'autoFront', AUTO_TEX.w, AUTO_TEX.h, drawAutoFront);
     canvasTex(scene, 'zebu', COW_TEX.w, COW_TEX.h, drawZebu);
-    canvasTex(scene, 'driverHead', 44, 44, drawDriverHead);
+    for (const id of DRIVER_IDS) canvasTex(scene, driverHeadKey(id), DRIVER_HEAD_TEX.w, DRIVER_HEAD_TEX.h, (c) => drawDriverHead(c, id));
     canvasTex(scene, 'scooter', SCOOTER_TEX.w, SCOOTER_TEX.h, drawScooter);
+    // vertical fade (opaque at the top) — feathers the night darkness into the sky
+    canvasTex(scene, 'fadeV', 4, 128, (c) => {
+        const g = c.createLinearGradient(0, 0, 0, 128);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = g;
+        c.fillRect(0, 0, 4, 128);
+    });
     // soft light brushes for night (erased out of the darkness layer)
     canvasTex(scene, 'glow', 256, 256, (c) => {
         const g = c.createRadialGradient(128, 128, 0, 128, 128, 128);
@@ -451,9 +464,11 @@ export function makeTextures(scene: Phaser.Scene): void {
         const H = AUTO_TEX.h;
         c.drawImage(src('autoBack'), 0, 0, W, H);
         c.drawImage(src('autoRoof'), 0, 0, W, H);
-        c.drawImage(src('driverHead'), AUTO_TEX.ox + 60, AUTO_TEX.oy - 174, 44, 44);
-        c.drawImage(src('wheel'), AUTO_TEX.ox - 95 - 32, AUTO_TEX.oy - 32, 64, 64);
-        c.drawImage(src('wheel'), AUTO_TEX.ox + 95 - 32, AUTO_TEX.oy - 32, 64, 64);
+        c.drawImage(src('autoDriver'), 0, 0, W, H);
+        // head sprite at half scale, centred on DRIVER_HEAD_POS (texture centre ≈ (48, 52))
+        c.drawImage(src(driverHeadKey('careful')), AUTO_TEX.ox + DRIVER_HEAD_POS.x - 24, AUTO_TEX.oy + DRIVER_HEAD_POS.y - 26, DRIVER_HEAD_TEX.w / 2, DRIVER_HEAD_TEX.h / 2);
+        const wd = 64 * ((ART_WHEEL_R + 0.8) / 25);
+        for (const sx of [-1, 1]) c.drawImage(src('wheel'), AUTO_TEX.ox + (sx * ART_WHEELBASE) / 2 - wd / 2, AUTO_TEX.oy - wd / 2, wd, wd);
         c.drawImage(src('autoFront'), 0, 0, W, H);
     });
 }

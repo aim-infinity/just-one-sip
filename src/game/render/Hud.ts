@@ -15,7 +15,7 @@ export class Hud {
     private bars: Phaser.GameObjects.Graphics;
     private routeAuto: Phaser.GameObjects.Image;
     private hint: Phaser.GameObjects.Container;
-    private last = { drunk: -1, spill: -1, dist: -1 };
+    private last = { drunk: -1, spill: -1, dist: -1, kmh: -1 };
     private readonly routeX0: number;
     private readonly routeX1: number;
     readonly root: Phaser.GameObjects.Container;
@@ -104,6 +104,26 @@ export class Hud {
         this.update();
     }
 
+    /** Dino-style feedback when the cruising speed steps up: a quick pop under the route bar. */
+    flashSpeed(kmh: number): void {
+        if (!this.distText.active) return;
+        const s = this.scene;
+        const t = s.add
+            .text(this.distText.x, 134, `Speeding up! ${kmh} km/h`, {
+                fontFamily: FONT,
+                fontSize: '24px',
+                color: '#ffd23f',
+                fontStyle: '800',
+                stroke: P.inkCss,
+                strokeThickness: 6,
+            })
+            .setOrigin(0.5, 0)
+            .setScale(0.6);
+        this.root.add(t);
+        s.tweens.add({ targets: t, scale: 1, duration: 220, ease: 'Back.out' });
+        s.tweens.add({ targets: t, alpha: 0, y: 120, delay: 900, duration: 400, onComplete: () => t.destroy() });
+    }
+
     hideHint(): void {
         if (!this.hintVisible) return;
         this.hintVisible = false;
@@ -132,8 +152,9 @@ export class Hud {
         // the mess meter pulses when you're close to the limit
         const danger = b.spilledMl / Math.max(1, t.spillLimitMl);
         this.spillText.setAlpha(danger > 0.7 ? 0.5 + 0.5 * Math.abs(Math.sin(sim.time * 8)) : 1);
-        if (dist !== this.last.dist && this.distText.active) this.distText.setText(`${dist} m to go`);
-        this.last = { drunk, spill, dist };
+        const kmh = Math.round((sim.speed / t.pxPerMeter) * 3.6);
+        if ((dist !== this.last.dist || kmh !== this.last.kmh) && this.distText.active) this.distText.setText(`${dist} m to go  ·  ${kmh} km/h`);
+        this.last = { drunk, spill, dist, kmh };
 
         // bottle gauge + drink bar (redrawn each frame — cheap)
         const g = this.bars;

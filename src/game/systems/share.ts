@@ -53,7 +53,14 @@ export function drawResultCard(r: RideResult, autoImage?: CanvasImageSource): HT
     c.textBaseline = 'alphabetic';
     c.fillStyle = P.inkCss;
     c.font = '900 44px "Baloo 2", system-ui, sans-serif';
-    c.fillText('JUST ONE SIP 🛺', 400, 84);
+    c.fillText('JUST ONE SIP', 400, 84);
+    // the 🛺 emoji faces left on most platforms: mirror it so it drives right like the game
+    const tw = c.measureText('JUST ONE SIP ').width;
+    c.save();
+    c.translate(400 + tw + c.measureText('🛺').width, 84);
+    c.scale(-1, 1);
+    c.fillText('🛺', 0, 0);
+    c.restore();
 
     c.font = '900 64px "Baloo 2", system-ui, sans-serif';
     c.fillStyle = '#fff';

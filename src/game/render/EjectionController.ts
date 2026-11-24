@@ -225,7 +225,7 @@ export class EjectionController {
         const hand = auto.toScreen({ x: HIP.x + this.seatHand.x + 6, y: HIP.y + this.seatHand.y + 8 });
         this.bottleState = { x: hand.x, y: hand.y, vx: 170, vy: -980, rot: this.bottleAngle0, fill: this.fill0, sprayT: 0 };
         this.bottle.setVisible(true);
-        this.world.say(['SAAR?!', 'Saar? SAAR!!', 'Aiyyo, my roof!'][Math.floor(Math.random() * 3)], 2400);
+        this.world.say(['Hey?!', 'Wait… where did you go?!', 'My roof!'][Math.floor(Math.random() * 3)], 2400);
     }
 
     /** Spinning bottle on its own arc, spraying water as it goes. */
@@ -298,7 +298,7 @@ export class EjectionController {
         const leg = (phase: number, front: boolean) => {
             const w = Math.sin(tt * 22 + phase);
             const knee = { x: lerp(50, 18 + 16 * w), y: lerp(0, 30) };
-            const foot = { x: lerp(54, knee.x - 6 + 14 * Math.sin(tt * 22 + phase + 1.2)), y: lerp(50, 62) };
+            const foot = { x: lerp(55, knee.x - 6 + 14 * Math.sin(tt * 22 + phase + 1.2)), y: lerp(60, 62) };
             limb({ x: 0, y: 0 }, knee, foot, 12, front ? P.pants : 0x30333c);
             g.fillStyle(0x3a2a20, 1);
             g.fillEllipse(foot.x + 5, foot.y + 2, 18, 9);
